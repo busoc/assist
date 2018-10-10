@@ -92,11 +92,11 @@ func (t *Timeline) Schedule(d delta) (*Schedule, error) {
 	} else {
 		es = append(es, vs...)
 	}
-	// if vs, err := t.scheduleMMIA(d.Cer, d.Intersect); err != nil {
-	// 	return nil, err
-	// } else {
-	// 	es = append(es, vs...)
-	// }
+	if vs, err := t.scheduleMMIA(d.Cer, d.Intersect); err != nil {
+		return nil, err
+	} else {
+		es = append(es, vs...)
+	}
 	sort.Slice(es, func(i, j int) bool { return es[i].When.Before(es[j].When) })
 
 	return &Schedule{When: es[0].When.Add(-time.Second * 5).Truncate(time.Second), Entries: es}, nil
@@ -125,14 +125,21 @@ func scheduleROCON(e, s *Period, on, azm time.Duration) *Entry {
 }
 
 func scheduleROCOFF(e, s *Period, off, azm time.Duration) *Entry {
-	start := e.Ends.Add(off)
-	// end := e.Ends
+	start := e.Ends.Add(-off)
+	end := e.Ends
 
 	y := &Entry{Label: ROCOFF, When: start}
 	if s == nil {
 		return y
 	}
-
+	if z := s.Starts.Add(azm); isBetween(start, end, s.Starts) || isBetween(start, end, z) {
+		y.When = s.Starts.Add(-off)
+		return y
+	}
+	if z := s.Ends.Add(azm); isBetween(start, end, s.Ends) || isBetween(start, end, z) {
+		y.When = s.Ends.Add(-off)
+		return y
+	}
 	return y
 }
 
@@ -148,11 +155,9 @@ func (t *Timeline) scheduleMXGS(on, off, azm time.Duration) ([]*Entry, error) {
 			continue
 		}
 		s := isCrossing(e, t.Saas, predicate)
-		//ROC schedule entry
 		rocon := scheduleROCON(e, s, on, azm)
 		rocoff := scheduleROCOFF(e, s, off, azm)
 
-		//
 		if rocoff.When.Before(rocon.When) || rocoff.When.Sub(rocon.When) < on {
 			continue
 		}
