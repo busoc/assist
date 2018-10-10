@@ -87,7 +87,7 @@ type Timeline struct {
 
 func (t *Timeline) Schedule(d delta) (*Schedule, error) {
 	var es []*Entry
-	if vs, err := t.scheduleMXGS(d.Rocon, d.Rocoff, time.Minute*5, d.AZM); err != nil {
+	if vs, err := t.scheduleMXGS(d.Rocon, d.Rocoff, d.AZM); err != nil {
 		return nil, err
 	} else {
 		es = append(es, vs...)
@@ -102,36 +102,58 @@ func (t *Timeline) Schedule(d delta) (*Schedule, error) {
 	return &Schedule{When: es[0].When.Add(-time.Second * 5).Truncate(time.Second), Entries: es}, nil
 }
 
-func (t *Timeline) scheduleMXGS(on, off, min, azm time.Duration) ([]*Entry, error) {
+func scheduleROCON(e, s *Period, on, azm time.Duration) *Entry {
+	start := e.Starts.Add(Ninety)
+	end := start.Add(on)
+
+	y := &Entry{Label: ROCON, When: start}
+	// no SAA crossing
+	if s == nil {
+		return y
+	}
+	if z := s.Starts.Add(azm); isBetween(start, end, s.Starts) || isBetween(start, end, z) {
+		y.When = z
+		if s.Ends.Sub(y.When) < on {
+			y.When = s.Ends.Add(azm)
+		}
+		return y
+	}
+	if z := s.Ends.Add(azm); isBetween(start, end, s.Ends) || isBetween(start, end, z) {
+		y.When = z
+	}
+	return y
+}
+
+func scheduleROCOFF(e, s *Period, off, azm time.Duration) *Entry {
+	start := e.Ends.Add(off)
+	// end := e.Ends
+
+	y := &Entry{Label: ROCOFF, When: start}
+	if s == nil {
+		return y
+	}
+
+	return y
+}
+
+func isBetween(f, t, d time.Time) bool {
+	return f.Before(d) && t.After(d)
+}
+
+func (t *Timeline) scheduleMXGS(on, off, azm time.Duration) ([]*Entry, error) {
 	predicate := func(e, a *Period) bool { return e.Overlaps(a) }
 	var es []*Entry
 	for _, e := range t.Eclipses {
-		if e.Duration() < min {
+		if e.Duration() <= on+off+Ninety {
 			continue
 		}
 		s := isCrossing(e, t.Saas, predicate)
 		//ROC schedule entry
-		rocon, rocoff := &Entry{Label: ROCON}, &Entry{Label: ROCOFF}
-		if s != nil {
-			// ROCON
-			switch when := e.Starts.Add(Ninety); {
-			case s.Ends.Add(azm).Before(when) || when.Add(on).Before(s.Starts):
-				// exit SAA before ROCON starts or enter SAA after ROCON fully executed
-				rocon.When = when // nominal
-			case 
-			default:
-				rocon.When = when // nominal
-			}
-			// ROCOFF
-			switch when := e.Ends.Add(-off); {
-			default:
-				rocoff.When = when // nominal
-			}
-		} else {
-			rocon.When = e.Starts.Add(Ninety)
-			rocoff.When = e.Ends.Add(-off)
-		}
-		if rocoff.When.Sub(rocon.When) < time.Minute {
+		rocon := scheduleROCON(e, s, on, azm)
+		rocoff := scheduleROCOFF(e, s, off, azm)
+
+		//
+		if rocoff.When.Before(rocon.When) || rocoff.When.Sub(rocon.When) < on {
 			continue
 		}
 		es = append(es, rocon, rocoff)
