@@ -154,9 +154,17 @@ func (t *Timeline) scheduleMXGS(on, off, azm time.Duration) ([]*Entry, error) {
 		if e.Duration() <= on+off+Ninety {
 			continue
 		}
-		s := isCrossing(e, t.Saas, predicate)
-		rocon := scheduleROCON(e, s, on, azm)
-		rocoff := scheduleROCOFF(e, s, off, azm)
+		as := isCrossingList(e, t.Saas, predicate)
+		var s1, s2 *Period
+		switch z := len(as); {
+		case z == 0:
+		case z == 1:
+			s1, s2 = as[0], as[0]
+		default:
+			s1, s2 = as[0], as[z-1]
+		}
+		rocon := scheduleROCON(e, s1, on, azm)
+		rocoff := scheduleROCOFF(e, s2, off, azm)
 
 		if rocoff.When.Before(rocon.When) || rocoff.When.Sub(rocon.When) < on {
 			continue
@@ -330,6 +338,22 @@ func skipEclipses(es, as []*Period, cross bool, d time.Duration) []*Period {
 		}
 	}
 	return nil
+}
+
+func isCrossingList(e *Period, as []*Period, predicate func(*Period, *Period) bool) []*Period {
+	if len(as) == 0 {
+		return nil
+	}
+	var es []*Period
+	for _, a := range as {
+		if predicate(e, a) {
+			es = append(es, a)
+		}
+		if a.Starts.After(e.Ends) {
+			break
+		}
+	}
+	return es
 }
 
 func isCrossing(e *Period, as []*Period, predicate func(*Period, *Period) bool) *Period {
