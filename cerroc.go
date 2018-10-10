@@ -87,16 +87,16 @@ type Timeline struct {
 
 func (t *Timeline) Schedule(d delta) (*Schedule, error) {
 	var es []*Entry
-	if vs, err := t.scheduleMXGS(d.Rocon, d.Rocoff, 0, d.AZM); err != nil {
+	if vs, err := t.scheduleMXGS(d.Rocon, d.Rocoff, time.Minute*5, d.AZM); err != nil {
 		return nil, err
 	} else {
 		es = append(es, vs...)
 	}
-	if vs, err := t.scheduleMMIA(d.Cer, d.Intersect); err != nil {
-		return nil, err
-	} else {
-		es = append(es, vs...)
-	}
+	// if vs, err := t.scheduleMMIA(d.Cer, d.Intersect); err != nil {
+	// 	return nil, err
+	// } else {
+	// 	es = append(es, vs...)
+	// }
 	sort.Slice(es, func(i, j int) bool { return es[i].When.Before(es[j].When) })
 
 	return &Schedule{When: es[0].When.Add(-time.Second * 5).Truncate(time.Second), Entries: es}, nil
@@ -113,27 +113,26 @@ func (t *Timeline) scheduleMXGS(on, off, min, azm time.Duration) ([]*Entry, erro
 		//ROC schedule entry
 		rocon, rocoff := &Entry{Label: ROCON}, &Entry{Label: ROCOFF}
 		if s != nil {
-			//ROCOFF
-			switch {
-			case e.Ends.After(s.Ends.Add(azm)) && e.Ends.Add(azm).Sub(s.Ends) < off:
-				rocoff.When = s.Ends.Add(-off)
-			case e.Ends.After(s.Starts.Add(azm)) && e.Ends.Sub(s.Starts.Add(azm)) < off:
-				rocoff.When = s.Starts.Add(azm).Add(-off)
+			// ROCON
+			switch when := e.Starts.Add(Ninety); {
+			case s.Ends.Add(azm).Before(when) || when.Add(on).Before(s.Starts):
+				// exit SAA before ROCON starts or enter SAA after ROCON fully executed
+				rocon.When = when // nominal
+			case 
 			default:
-				rocoff.When = e.Ends.Add(-off)
+				rocon.When = when // nominal
 			}
-			//ROCON
-			switch n := e.Starts.Add(Ninety); {
-			case s.Starts.After(n) && s.Starts.Sub(n) < on:
-				rocon.When = s.Starts.Add(Ninety + on)
-			case e.Ends.After(n) && s.Ends.Sub(n) < on:
-				rocon.When = s.Ends.Add(Ninety + on)
+			// ROCOFF
+			switch when := e.Ends.Add(-off); {
 			default:
-				rocon.When = n.Add(on)
+				rocoff.When = when // nominal
 			}
 		} else {
-			rocon.When = e.Starts.Add(Ninety + on)
+			rocon.When = e.Starts.Add(Ninety)
 			rocoff.When = e.Ends.Add(-off)
+		}
+		if rocoff.When.Sub(rocon.When) < time.Minute {
+			continue
 		}
 		es = append(es, rocon, rocoff)
 	}
@@ -199,7 +198,7 @@ func main() {
 		os.Exit(2)
 	}
 	var d delta
-	flag.DurationVar(&d.Rocon, "delta-rocon", 10*time.Second, "delta ROC margin time (10s)")
+	flag.DurationVar(&d.Rocon, "delta-rocon", 50*time.Second, "delta ROC margin time (10s)")
 	flag.DurationVar(&d.Rocoff, "delta-rocoff", 80*time.Second, "delta ROC margin time (80s)")
 	flag.DurationVar(&d.Cer, "delta-cer", DefaultDeltaTime, "delta CER margin time (30s)")
 	flag.DurationVar(&d.Intersect, "i", DefaultIntersectTime, "intersection time (2m)")
