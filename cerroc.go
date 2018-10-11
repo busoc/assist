@@ -18,7 +18,7 @@ const Leap = 18 * time.Second
 
 const (
 	Version   = "0.1.0-beta"
-	BuildTime = "2018-09-26 17:10:00"
+	BuildTime = "2018-10-11 06:52:00"
 	Program   = "assist"
 )
 
@@ -103,10 +103,6 @@ func main() {
 	resolution := flag.Duration("r", time.Second*10, "prediction accuracy (10s)")
 	flag.Parse()
 
-	ts, err := listPeriods(flag.Arg(0), *resolution)
-	if err != nil {
-		log.Fatalln(err)
-	}
 	b, err := time.Parse(time.RFC3339, *baseTime)
 	if err != nil && *baseTime != "" {
 		log.Fatalln(err)
@@ -114,52 +110,57 @@ func main() {
 	if b.IsZero() {
 		b = DefaultBaseTime
 	}
-	s, err := ts.Schedule(d, b)
+	s, err := Open(flag.Arg(0), *resolution)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	es, err := s.Schedule(d)
 	if err != nil {
 		log.Fatalln(err)
 	}
 	if fs.Empty() {
-		for i, e := range s.Entries {
+		for i, e := range es {
 			log.Printf("%3d | %7s | %s", i+1, e.Label, e.When.Truncate(time.Second).Format(timeFormat))
 		}
+		return
 	}
-	writePreamble(os.Stdout, s.When)
+	writePreamble(os.Stdout, b)
 	if err := writeMetadata(os.Stdout, flag.Arg(0), fs); err != nil {
 		log.Fatalln(err)
 	}
-	if err := writeSchedule(os.Stdout, s, fs); err != nil {
+	if err := writeSchedule(os.Stdout, es, b, fs); err != nil {
 		log.Fatalln(err)
 	}
 }
 
-func writeSchedule(w io.Writer, s *Schedule, fs fileset) error {
+func writeSchedule(w io.Writer, es []*Entry, when time.Time, fs fileset) error {
 	var err error
-	for _, e := range s.Entries {
-		if e.When.Before(s.When) {
+	for _, e := range es {
+		if e.When.Before(when) {
 			continue
 		}
-		delta := e.When.Sub(s.When)
+		delta := e.When.Sub(when)
 		switch e.Label {
 		case ROCON:
 			if !fs.CanROC() {
 				return missingFile("ROC")
 			}
-			delta, err = prepareCommand(fs.Rocon, e.When, delta, fs.Keep)
+			delta, err = prepareCommand(w, fs.Rocon, e.When, delta, fs.Keep)
 		case ROCOFF:
 			if !fs.CanROC() {
 				return missingFile("ROC")
 			}
-			delta, err = prepareCommand(fs.Rocoff, e.When, delta, fs.Keep)
+			delta, err = prepareCommand(w, fs.Rocoff, e.When, delta, fs.Keep)
 		case CERON:
 			if !fs.CanCER() {
 				return missingFile("CER")
 			}
-			delta, err = prepareCommand(fs.Ceron, e.When, delta, fs.Keep)
+			delta, err = prepareCommand(w, fs.Ceron, e.When, delta, fs.Keep)
 		case CEROFF:
 			if !fs.CanCER() {
 				return missingFile("CER")
 			}
-			delta, err = prepareCommand(fs.Ceroff, e.When, delta, fs.Keep)
+			delta, err = prepareCommand(w, fs.Ceroff, e.When, delta, fs.Keep)
 		}
 		if err != nil {
 			return err
@@ -203,7 +204,7 @@ func writeMetadata(w io.Writer, rs string, fs fileset) error {
 	return nil
 }
 
-func prepareCommand(file string, w time.Time, delta time.Duration, keep bool) (time.Duration, error) {
+func prepareCommand(w io.Writer, file string, when time.Time, delta time.Duration, keep bool) (time.Duration, error) {
 	if file == "" {
 		return 0, nil
 	}
@@ -215,7 +216,7 @@ func prepareCommand(file string, w time.Time, delta time.Duration, keep bool) (t
 
 	s := bufio.NewScanner(r)
 	// year := time.Date(w.Year(), 1, 1, 0, 0, 0, 0, time.UTC).Add(DIFF+Leap)
-	year := w.AddDate(0, 0, -w.YearDay()+1).Truncate(Day).Add(Leap)
+	year := when.AddDate(0, 0, -when.YearDay()+1).Truncate(Day).Add(Leap)
 
 	var elapsed time.Duration
 	for s.Scan() {
@@ -224,14 +225,14 @@ func prepareCommand(file string, w time.Time, delta time.Duration, keep bool) (t
 			row = fmt.Sprintf("%d %s", int(delta.Seconds()), row)
 			delta += Five
 			elapsed += Five
-			w = w.Add(Five)
+			when = when.Add(Five)
 		} else {
 			// stamp := w.Add(DIFF+Leap).Truncate(step)
-			stamp := w.Add(Leap).Truncate(Five)
-			io.WriteString(os.Stdout, fmt.Sprintf("# SOY (GPS): %d/ GMT %3d/%s\n", stamp.Unix()-year.Unix(), stamp.YearDay(), stamp.Format("15:04:05")))
+			stamp := when.Add(Leap).Truncate(Five)
+			io.WriteString(w, fmt.Sprintf("# SOY (GPS): %d/ GMT %3d/%s\n", stamp.Unix()-year.Unix(), stamp.YearDay(), stamp.Format("15:04:05")))
 		}
 		if keep || !strings.HasPrefix(row, "#") {
-			io.WriteString(os.Stdout, row+"\n")
+			io.WriteString(w, row+"\n")
 		}
 	}
 	return elapsed, s.Err()

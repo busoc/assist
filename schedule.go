@@ -18,14 +18,94 @@ const (
 	PredictComment      = '#'
 )
 
-type Schedule struct {
-	When    time.Time
-	Entries []*Entry
-}
-
 type Entry struct {
 	When  time.Time
 	Label string
+}
+
+type Schedule struct {
+  Eclipses []*Period
+  Saas     []*Period
+}
+
+func Open(p string, r time.Duration) (*Schedule, error) {
+  var (
+    s Schedule
+    err error
+  )
+  s.Eclipses, s.Saas, err = listPeriods(p, r)
+  if err != nil {
+    return nil, err
+  }
+  return &s, nil
+}
+
+func (s *Schedule) Schedule(d delta) ([]*Entry, error) {
+  var es []*Entry
+	if vs, err := s.scheduleMXGS(d.Rocon, d.Rocoff, d.Wait, d.AZM); err != nil {
+		return nil, err
+	} else {
+		es = append(es, vs...)
+	}
+	if vs, err := s.scheduleMMIA(d.Cer, d.Intersect); err != nil {
+		return nil, err
+	} else {
+		es = append(es, vs...)
+	}
+	sort.Slice(es, func(i, j int) bool { return es[i].When.Before(es[j].When) })
+  return es, nil
+}
+
+func (s *Schedule) scheduleMXGS(on, off, wait, azm time.Duration) ([]*Entry, error) {
+	predicate := func(e, a *Period) bool { return e.Overlaps(a) }
+	var es []*Entry
+	for _, e := range s.Eclipses {
+		if e.Duration() <= on+off+wait {
+			continue
+		}
+		as := isCrossingList(e, s.Saas, predicate)
+		var s1, s2 *Period
+		switch z := len(as); {
+		case z == 0:
+		case z == 1:
+			s1, s2 = as[0], as[0]
+		default:
+			s1, s2 = as[0], as[z-1]
+		}
+		rocon := scheduleROCON(e, s1, on, wait, azm)
+		rocoff := scheduleROCOFF(e, s2, off, azm)
+
+		if rocoff.When.Before(rocon.When) || rocoff.When.Sub(rocon.When) < on {
+			continue
+		}
+		es = append(es, rocon, rocoff)
+	}
+	return es, nil
+}
+
+func (s *Schedule) scheduleMMIA(delta, intersect time.Duration) ([]*Entry, error) {
+	eclipses := make([]*Period, len(s.Eclipses))
+	copy(eclipses, s.Eclipses)
+
+	var (
+		crossing bool
+		es       []*Entry
+	)
+	predicate := func(e, a *Period) bool {
+		return intersect == 0 || e.Intersect(a) > intersect
+	}
+	for len(eclipses) > 0 {
+		e := eclipses[0]
+		if a := isCrossing(e, s.Saas, predicate); a != nil {
+			crossing = true
+			es = append(es, &Entry{Label: CERON, When: e.Starts.Add(-delta)})
+		} else {
+			crossing = false
+			es = append(es, &Entry{Label: CEROFF, When: e.Starts.Add(-delta)})
+		}
+		eclipses = skipEclipses(eclipses[1:], s.Saas, crossing, intersect)
+	}
+	return es, nil
 }
 
 type Period struct {
@@ -65,80 +145,6 @@ func (p Period) Intersect(o *Period) time.Duration {
 		delta = p.Ends.Sub(o.Starts)
 	}
 	return delta
-}
-
-type Timeline struct {
-	Eclipses []*Period
-	Saas     []*Period
-}
-
-func (t *Timeline) Schedule(d delta, base time.Time) (*Schedule, error) {
-	var es []*Entry
-	if vs, err := t.scheduleMXGS(d.Rocon, d.Rocoff, d.Wait, d.AZM); err != nil {
-		return nil, err
-	} else {
-		es = append(es, vs...)
-	}
-	if vs, err := t.scheduleMMIA(d.Cer, d.Intersect); err != nil {
-		return nil, err
-	} else {
-		es = append(es, vs...)
-	}
-	sort.Slice(es, func(i, j int) bool { return es[i].When.Before(es[j].When) })
-
-	return &Schedule{When: base.Add(-time.Second * 5).Truncate(time.Second), Entries: es}, nil
-}
-
-func (t *Timeline) scheduleMXGS(on, off, wait, azm time.Duration) ([]*Entry, error) {
-	predicate := func(e, a *Period) bool { return e.Overlaps(a) }
-	var es []*Entry
-	for _, e := range t.Eclipses {
-		if e.Duration() <= on+off+wait {
-			continue
-		}
-		as := isCrossingList(e, t.Saas, predicate)
-		var s1, s2 *Period
-		switch z := len(as); {
-		case z == 0:
-		case z == 1:
-			s1, s2 = as[0], as[0]
-		default:
-			s1, s2 = as[0], as[z-1]
-		}
-		rocon := scheduleROCON(e, s1, on, wait, azm)
-		rocoff := scheduleROCOFF(e, s2, off, azm)
-
-		if rocoff.When.Before(rocon.When) || rocoff.When.Sub(rocon.When) < on {
-			continue
-		}
-		es = append(es, rocon, rocoff)
-	}
-	return es, nil
-}
-
-func (t *Timeline) scheduleMMIA(delta, intersect time.Duration) ([]*Entry, error) {
-	eclipses := make([]*Period, len(t.Eclipses))
-	copy(eclipses, t.Eclipses)
-
-	var (
-		crossing bool
-		es       []*Entry
-	)
-	predicate := func(e, a *Period) bool {
-		return intersect == 0 || e.Intersect(a) > intersect
-	}
-	for len(eclipses) > 0 {
-		e := eclipses[0]
-		if a := isCrossing(e, t.Saas, predicate); a != nil {
-			crossing = true
-			es = append(es, &Entry{Label: CERON, When: e.Starts.Add(-delta)})
-		} else {
-			crossing = false
-			es = append(es, &Entry{Label: CEROFF, When: e.Starts.Add(-delta)})
-		}
-		eclipses = skipEclipses(eclipses[1:], t.Saas, crossing, intersect)
-	}
-	return es, nil
 }
 
 func scheduleROCON(e, s *Period, on, wait, azm time.Duration) *Entry {
@@ -204,10 +210,10 @@ func isBetween(f, t, d time.Time) bool {
 	return f.Before(d) && t.After(d)
 }
 
-func listPeriods(file string, resolution time.Duration) (*Timeline, error) {
+func listPeriods(file string, resolution time.Duration) ([]*Period, []*Period, error) {
 	r, err := os.Open(file)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer r.Close()
 	rs := csv.NewReader(r)
@@ -216,12 +222,12 @@ func listPeriods(file string, resolution time.Duration) (*Timeline, error) {
 	rs.FieldsPerRecord = PredictColumns
 
 	if r, err := rs.Read(); r == nil && err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var (
 		e, a, z Period
-		ts      Timeline
+		es, as []*Period
 	)
 	for i := 0; ; i++ {
 		r, err := rs.Read()
@@ -229,37 +235,37 @@ func listPeriods(file string, resolution time.Duration) (*Timeline, error) {
 			break
 		}
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if isEnterPeriod(r[PredictEclipseIndex]) && e.IsZero() {
 			if e.Starts, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
-				return nil, timeBadSyntax(i, r[PredictTimeIndex])
+				return nil, nil, timeBadSyntax(i, r[PredictTimeIndex])
 			}
 		}
 		if isLeavePeriod(r[PredictEclipseIndex]) && !e.IsZero() {
 			if e.Ends, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
-				return nil, timeBadSyntax(i, r[PredictTimeIndex])
+				return nil, nil, timeBadSyntax(i, r[PredictTimeIndex])
 			}
-			ts.Eclipses = append(ts.Eclipses, &Period{e.Starts.UTC(), e.Ends.Add(-resolution).UTC()})
+			es = append(es, &Period{e.Starts.UTC(), e.Ends.Add(-resolution).UTC()})
 			e = z
 		}
 		if isEnterPeriod(r[PredictSaaIndex]) && a.IsZero() {
 			if a.Starts, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
-				return nil, timeBadSyntax(i, r[PredictTimeIndex])
+				return nil, nil, timeBadSyntax(i, r[PredictTimeIndex])
 			}
 		}
 		if isLeavePeriod(r[PredictSaaIndex]) && !a.IsZero() {
 			if a.Ends, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
-				return nil, timeBadSyntax(i, r[PredictTimeIndex])
+				return nil, nil, timeBadSyntax(i, r[PredictTimeIndex])
 			}
-			ts.Saas = append(ts.Saas, &Period{a.Starts.UTC(), a.Ends.Add(-resolution).UTC()})
+			as = append(as, &Period{a.Starts.UTC(), a.Ends.Add(-resolution).UTC()})
 			a = z
 		}
 	}
-	if len(ts.Eclipses) == 0 && len(ts.Saas) == 0 {
-		return nil, fmt.Errorf("no eclipses/saas found")
+	if len(es) == 0 && len(as) == 0 {
+		return nil, nil, fmt.Errorf("no eclipses/saas found")
 	}
-	return &ts, nil
+	return es, as, nil
 }
 
 func timeBadSyntax(i int, v string) error {
