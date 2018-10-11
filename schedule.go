@@ -74,7 +74,7 @@ type Timeline struct {
 
 func (t *Timeline) Schedule(d delta, base time.Time) (*Schedule, error) {
 	var es []*Entry
-	if vs, err := t.scheduleMXGS(d.Rocon, d.Rocoff, d.AZM); err != nil {
+	if vs, err := t.scheduleMXGS(d.Rocon, d.Rocoff, d.Wait, d.AZM); err != nil {
 		return nil, err
 	} else {
 		es = append(es, vs...)
@@ -89,11 +89,11 @@ func (t *Timeline) Schedule(d delta, base time.Time) (*Schedule, error) {
 	return &Schedule{When: base.Add(-time.Second * 5).Truncate(time.Second), Entries: es}, nil
 }
 
-func (t *Timeline) scheduleMXGS(on, off, azm time.Duration) ([]*Entry, error) {
+func (t *Timeline) scheduleMXGS(on, off, wait, azm time.Duration) ([]*Entry, error) {
 	predicate := func(e, a *Period) bool { return e.Overlaps(a) }
 	var es []*Entry
 	for _, e := range t.Eclipses {
-		if e.Duration() <= on+off+Ninety {
+		if e.Duration() <= on+off+wait {
 			continue
 		}
 		as := isCrossingList(e, t.Saas, predicate)
@@ -105,7 +105,7 @@ func (t *Timeline) scheduleMXGS(on, off, azm time.Duration) ([]*Entry, error) {
 		default:
 			s1, s2 = as[0], as[z-1]
 		}
-		rocon := scheduleROCON(e, s1, on, azm)
+		rocon := scheduleROCON(e, s1, on, wait, azm)
 		rocoff := scheduleROCOFF(e, s2, off, azm)
 
 		if rocoff.When.Before(rocon.When) || rocoff.When.Sub(rocon.When) < on {
@@ -141,8 +141,8 @@ func (t *Timeline) scheduleMMIA(delta, intersect time.Duration) ([]*Entry, error
 	return es, nil
 }
 
-func scheduleROCON(e, s *Period, on, azm time.Duration) *Entry {
-	start := e.Starts.Add(Ninety)
+func scheduleROCON(e, s *Period, on, wait, azm time.Duration) *Entry {
+	start := e.Starts.Add(wait)
 	end := start.Add(on)
 
 	y := &Entry{Label: ROCON, When: start}
