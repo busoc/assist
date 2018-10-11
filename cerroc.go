@@ -111,16 +111,26 @@ func scheduleROCON(e, s *Period, on, azm time.Duration) *Entry {
 	if s == nil {
 		return y
 	}
-	if z := s.Starts.Add(azm); isBetween(start, end, s.Starts) || isBetween(start, end, z) {
+	if z := s.Starts.Add(azm); z.After(start) && s.Starts.Before(end) {
 		y.When = z
 		if s.Ends.Sub(y.When) < on {
 			y.When = s.Ends.Add(azm)
 		}
 		return y
 	}
-	if z := s.Ends.Add(azm); isBetween(start, end, s.Ends) || isBetween(start, end, z) {
+	// if z := s.Starts.Add(azm); isBetween(start, end, s.Starts) || isBetween(start, end, z) {
+	// 	y.When = z
+	// 	if s.Ends.Sub(y.When) < on {
+	// 		y.When = s.Ends.Add(azm)
+	// 	}
+	// 	return y
+	// }
+	if z := s.Ends.Add(azm); z.After(start) && s.Ends.Before(end) {
 		y.When = z
 	}
+	// if z := s.Ends.Add(azm); isBetween(start, end, s.Ends) || isBetween(start, end, z) {
+	// 	y.When = z
+	// }
 	return y
 }
 
@@ -132,14 +142,22 @@ func scheduleROCOFF(e, s *Period, off, azm time.Duration) *Entry {
 	if s == nil {
 		return y
 	}
-	if z := s.Starts.Add(azm); isBetween(start, end, s.Starts) || isBetween(start, end, z) {
+	if z := s.Starts.Add(azm); z.After(start) && s.Starts.Before(end) {
 		y.When = s.Starts.Add(-off)
 		return y
 	}
-	if z := s.Ends.Add(azm); isBetween(start, end, s.Ends) || isBetween(start, end, z) {
+	// if z := s.Starts.Add(azm); isBetween(start, end, s.Starts) || isBetween(start, end, z) {
+	// 	y.When = s.Starts.Add(-off)
+	// 	return y
+	// }
+	if z := s.Ends.Add(azm); z.After(start) && s.Ends.Before(end) {
 		y.When = s.Ends.Add(-off)
 		return y
 	}
+	// if z := s.Ends.Add(azm); isBetween(start, end, s.Ends) || isBetween(start, end, z) {
+	// 	y.When = s.Ends.Add(-off)
+	// 	return y
+	// }
 	return y
 }
 
