@@ -196,7 +196,7 @@ func scheduleROCOFF(e, s *Period, off, azm time.Duration) *Entry {
 	// 	return y
 	// }
 	if z := s.Ends.Add(azm); z.After(start) && s.Ends.Before(end) {
-		y.When = s.Ends.Add(-off)
+		y.When = s.Starts.Add(-off)
 		return y
 	}
 	// if z := s.Ends.Add(azm); isBetween(start, end, s.Ends) || isBetween(start, end, z) {
