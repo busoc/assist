@@ -219,6 +219,9 @@ func prepareCommand(w io.Writer, file string, when time.Time, delta time.Duratio
 	year := when.AddDate(0, 0, -when.YearDay()+1).Truncate(Day).Add(Leap)
 
 	var elapsed time.Duration
+	if keep {
+		io.WriteString(w, fmt.Sprintf("# %s: %s\n", file, when.Format(timeFormat)))
+	}
 	for s.Scan() {
 		row := s.Text()
 		if !strings.HasPrefix(row, "#") {
