@@ -74,7 +74,7 @@ func init() {
 	ExecutionTime = time.Now().Truncate(time.Second).UTC()
 	DefaultBaseTime = ExecutionTime.Add(Day).Truncate(Day).Add(time.Hour * 10)
 
-	log.SetOutput(os.Stdout)
+	log.SetOutput(os.Stderr)
 	log.SetFlags(0)
 }
 
@@ -99,6 +99,7 @@ func main() {
 	flag.StringVar(&fs.Ceron, "ceron-file", "", "mmia ceron command file")
 	flag.StringVar(&fs.Ceroff, "ceroff-file", "", "mmia ceroff command file")
 	flag.BoolVar(&fs.Keep, "keep-comment", false, "keep comment from command file")
+	file := flag.String("d", "", "write schedule to file")
 	baseTime := flag.String("base-time", DefaultBaseTime.Format("2006-01-02T15:04:05Z"), "schedule start time")
 	resolution := flag.Duration("r", time.Second*10, "prediction accuracy (10s)")
 	flag.Parse()
@@ -124,11 +125,19 @@ func main() {
 		}
 		return
 	}
-	writePreamble(os.Stdout, b)
-	if err := writeMetadata(os.Stdout, flag.Arg(0), fs); err != nil {
+	var w io.Writer = os.Stdout
+	switch f, err := os.Create(*file); {
+	case err == nil:
+		defer f.Close()
+		w = f
+	case err != nil && *file != "":
 		log.Fatalln(err)
 	}
-	if err := writeSchedule(os.Stdout, es, b, fs); err != nil {
+	writePreamble(w, b)
+	if err := writeMetadata(w, flag.Arg(0), fs); err != nil {
+		log.Fatalln(err)
+	}
+	if err := writeSchedule(w, es, b, fs); err != nil {
 		log.Fatalln(err)
 	}
 }
