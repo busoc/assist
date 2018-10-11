@@ -88,12 +88,12 @@ func main() {
 		d  delta
 		fs fileset
 	)
-	flag.DurationVar(&d.Rocon, "rocon-delta", 50*time.Second, "delta ROC margin time (10s)")
+	flag.DurationVar(&d.Rocon, "rocon-delta", 50*time.Second, "delta ROC margin time (50s)")
 	flag.DurationVar(&d.Rocoff, "rocoff-delta", 80*time.Second, "delta ROC margin time (80s)")
 	flag.DurationVar(&d.Wait, "rocon-wait", 90*time.Second, "wait time before starting ROC (90s)")
-	flag.DurationVar(&d.Cer, "cer-delta", DefaultDeltaTime, "delta CER margin time (30s)")
+	flag.DurationVar(&d.Cer, "cer-delta", 300*time.Second, "delta CER margin time (300s)")
 	flag.DurationVar(&d.Intersect, "i", DefaultIntersectTime, "intersection time (120s)")
-	flag.DurationVar(&d.AZM, "z", DefaultDeltaTime, "default AZM duration (30s)")
+	flag.DurationVar(&d.AZM, "z", 40*time.Second, "default AZM duration (40s)")
 	flag.StringVar(&fs.Rocon, "rocon-file", "", "mxgs rocon command file")
 	flag.StringVar(&fs.Rocoff, "rocoff-file", "", "mxgs rocoff command file")
 	flag.StringVar(&fs.Ceron, "ceron-file", "", "mmia ceron command file")
@@ -120,6 +120,7 @@ func main() {
 		log.Fatalln(err)
 	}
 	if fs.Empty() {
+		log.SetOutput(os.Stdout)
 		for i, e := range es {
 			log.Printf("%3d | %7s | %s", i+1, e.Label, e.When.Truncate(time.Second).Format(timeFormat))
 		}

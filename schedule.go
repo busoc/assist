@@ -75,7 +75,7 @@ func (s *Schedule) scheduleMXGS(on, off, wait, azm time.Duration) ([]*Entry, err
 		rocon := scheduleROCON(e, s1, on, wait, azm)
 		rocoff := scheduleROCOFF(e, s2, off, azm)
 
-		if rocoff.When.Before(rocon.When) || rocoff.When.Sub(rocon.When) < on {
+		if rocoff.When.Before(rocon.When) || rocoff.When.Sub(rocon.When) <= on {
 			continue
 		}
 		es = append(es, rocon, rocoff)
