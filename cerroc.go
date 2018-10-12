@@ -2,9 +2,11 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/md5"
 	"flag"
 	"io"
+	"io/ioutil"
 	"fmt"
 	"log"
 	"os"
@@ -115,17 +117,18 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	es, err := s.Schedule(d)
-	if err != nil {
-		log.Fatalln(err)
-	}
 	if fs.Empty() {
+		es, err := s.Schedule(d)
+		if err != nil {
+			log.Fatalln(err)
+		}
 		log.SetOutput(os.Stdout)
 		for i, e := range es {
 			log.Printf("%3d | %7s | %s", i+1, e.Label, e.When.Truncate(time.Second).Format(timeFormat))
 		}
 		return
 	}
+	s = s.Filter(b)
 	var w io.Writer = os.Stdout
 	switch f, err := os.Create(*file); {
 	case err == nil:
@@ -134,6 +137,14 @@ func main() {
 	case err != nil && *file != "":
 		log.Fatalln(err)
 	}
+	es, err := s.Schedule(d)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if len(es) == 0 {
+		return
+	}
+	b = es[0].When.Add(-time.Second*5)
 	writePreamble(w, b)
 	if err := writeMetadata(w, flag.Arg(0), fs); err != nil {
 		log.Fatalln(err)
@@ -180,9 +191,12 @@ func writeSchedule(w io.Writer, es []*Entry, when time.Time, fs fileset) error {
 }
 
 func writePreamble(w io.Writer, when time.Time) {
+	year := when.AddDate(0, 0, -when.YearDay()+1).Truncate(Day).Add(Leap)
+	stamp := when.Add(Leap).Truncate(Five)
+
 	io.WriteString(w, fmt.Sprintf("# %s-%s (build: %s)\n", Program, Version, BuildTime))
 	io.WriteString(w, fmt.Sprintf("# execution time: %s\n", ExecutionTime))
-	io.WriteString(w, fmt.Sprintf("# schedule start time: %s\n", when))
+	io.WriteString(w, fmt.Sprintf("# schedule start time: %s (SOY: %d)\n", when, stamp.Unix()-year.Unix()))
 	io.WriteString(w, "#\n")
 }
 
@@ -218,19 +232,23 @@ func prepareCommand(w io.Writer, file string, when time.Time, delta time.Duratio
 	if file == "" {
 		return 0, nil
 	}
-	r, err := os.Open(file)
+	bs, err := ioutil.ReadFile(file)
 	if err != nil {
 		return 0, err
 	}
-	defer r.Close()
+	d := scheduleDuration(bytes.NewReader(bs))
+	if d <= 0 {
+		return 0, nil
+	}
 
-	s := bufio.NewScanner(r)
+	s := bufio.NewScanner(bytes.NewReader(bs))
 	// year := time.Date(w.Year(), 1, 1, 0, 0, 0, 0, time.UTC).Add(DIFF+Leap)
 	year := when.AddDate(0, 0, -when.YearDay()+1).Truncate(Day).Add(Leap)
 
 	var elapsed time.Duration
 	if keep {
-		io.WriteString(w, fmt.Sprintf("# %s: %s\n", file, when.Format(timeFormat)))
+		io.WriteString(w, "#\n")
+		io.WriteString(w, fmt.Sprintf("# %s: %s (execution time: %s)\n", file, when.Format(timeFormat), d))
 	}
 	for s.Scan() {
 		row := s.Text()
@@ -249,6 +267,18 @@ func prepareCommand(w io.Writer, file string, when time.Time, delta time.Duratio
 		}
 	}
 	return elapsed, s.Err()
+}
+
+func scheduleDuration(r io.Reader) time.Duration {
+	s := bufio.NewScanner(r)
+
+	var d time.Duration
+	for s.Scan() {
+		if t := s.Text(); !strings.HasPrefix(t, "#") {
+			d += Five
+		}
+	}
+	return d
 }
 
 func missingFile(n string) error {
