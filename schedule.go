@@ -40,6 +40,21 @@ func Open(p string, r time.Duration) (*Schedule, error) {
   return &s, nil
 }
 
+func (s *Schedule) Filter(t time.Time) *Schedule {
+	es, as := make([]*Period, 0, len(s.Eclipses)), make([]*Period, 0, len(s.Saas))
+	for _, e := range s.Eclipses {
+		if e.Starts.After(t) {
+			es = append(es, e)
+		}
+	}
+	for _, a := range s.Saas {
+		if a.Starts.After(t) {
+			as = append(as, a)
+		}
+	}
+	return &Schedule{es, as}
+}
+
 func (s *Schedule) Schedule(d delta) ([]*Entry, error) {
   var es []*Entry
 	if vs, err := s.scheduleMXGS(d.Rocon, d.Rocoff, d.Wait, d.AZM); err != nil {
