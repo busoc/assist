@@ -81,19 +81,19 @@ func init() {
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "ASIM semi automatic schedule generator tool\n")
-		fmt.Fprintf(os.Stderr, "assist [-r] [-z] [-delta-rocon] [-delta-rocoff] [-delta-cer] [-i] <predict>\n")
+		fmt.Fprintf(os.Stderr, "assist [-keep-comment] [-resolution] [-azm] [-rocon-time] [-rocoff-time] [-cer-time] [-cer-cross] <trajectory>\n")
 		os.Exit(2)
 	}
 	var (
 		d  delta
 		fs fileset
 	)
-	flag.DurationVar(&d.Rocon, "rocon-delta", 50*time.Second, "delta ROC margin time (50s)")
-	flag.DurationVar(&d.Rocoff, "rocoff-delta", 80*time.Second, "delta ROC margin time (80s)")
+	flag.DurationVar(&d.Rocon, "rocon-time", 50*time.Second, "delta ROC margin time (50s)")
+	flag.DurationVar(&d.Rocoff, "rocoff-time", 80*time.Second, "delta ROC margin time (80s)")
 	flag.DurationVar(&d.Wait, "rocon-wait", 90*time.Second, "wait time before starting ROC (90s)")
-	flag.DurationVar(&d.Cer, "cer-delta", 300*time.Second, "delta CER margin time (300s)")
-	flag.DurationVar(&d.Intersect, "i", DefaultIntersectTime, "intersection time (120s)")
-	flag.DurationVar(&d.AZM, "z", 40*time.Second, "default AZM duration (40s)")
+	flag.DurationVar(&d.Cer, "cer-time", 300*time.Second, "delta CER margin time (300s)")
+	flag.DurationVar(&d.Intersect, "cer-crossing", DefaultIntersectTime, "intersection time (120s)")
+	flag.DurationVar(&d.AZM, "azm", 40*time.Second, "default AZM duration (40s)")
 	flag.StringVar(&fs.Rocon, "rocon-file", "", "mxgs rocon command file")
 	flag.StringVar(&fs.Rocoff, "rocoff-file", "", "mxgs rocoff command file")
 	flag.StringVar(&fs.Ceron, "ceron-file", "", "mmia ceron command file")
@@ -101,7 +101,7 @@ func main() {
 	flag.BoolVar(&fs.Keep, "keep-comment", false, "keep comment from command file")
 	file := flag.String("d", "", "write schedule to file")
 	baseTime := flag.String("base-time", DefaultBaseTime.Format("2006-01-02T15:04:05Z"), "schedule start time")
-	resolution := flag.Duration("r", time.Second*10, "prediction accuracy (10s)")
+	resolution := flag.Duration("resolution", time.Second*10, "prediction accuracy (10s)")
 	flag.Parse()
 
 	b, err := time.Parse(time.RFC3339, *baseTime)
