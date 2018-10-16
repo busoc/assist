@@ -28,12 +28,21 @@ type Schedule struct {
   Saas     []*Period
 }
 
-func Open(p string, r time.Duration) (*Schedule, error) {
-  var (
+func Open(p string, d time.Duration) (*Schedule, error) {
+	r, err := os.Open(p)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+	return OpenReader(r, d)
+}
+
+func OpenReader(r io.Reader, d time.Duration) (*Schedule, error) {
+	var (
     s Schedule
     err error
   )
-  s.Eclipses, s.Saas, err = listPeriods(p, r)
+  s.Eclipses, s.Saas, err = listPeriods(r, d)
   if err != nil {
     return nil, err
   }
@@ -225,12 +234,7 @@ func isBetween(f, t, d time.Time) bool {
 	return f.Before(d) && t.After(d)
 }
 
-func listPeriods(file string, resolution time.Duration) ([]*Period, []*Period, error) {
-	r, err := os.Open(file)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer r.Close()
+func listPeriods(r io.Reader, resolution time.Duration) ([]*Period, []*Period, error) {
 	rs := csv.NewReader(r)
 	rs.Comment = PredictComment
 	rs.Comma = PredictComma

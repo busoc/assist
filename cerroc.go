@@ -113,7 +113,13 @@ func main() {
 	if b.IsZero() {
 		b = DefaultBaseTime
 	}
-	s, err := Open(flag.Arg(0), *resolution)
+	var s *Schedule
+	switch flag.NArg() {
+	default:
+		s, err = Open(flag.Arg(0), *resolution)
+	case 0:
+		s, err = OpenReader(os.Stdin, *resolution)
+	}
 	if err != nil {
 		log.Fatalln(err)
 	}
