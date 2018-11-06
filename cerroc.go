@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -38,10 +39,22 @@ const (
 	CEROFF = "CEROFF"
 )
 
+const (
+	ALLIOP = "alliop"
+	INSTR  = "instrlist"
+)
+
+const (
+	InstrMMIA = "MMIA 129"
+	InstrMXGS = "MXGS 128"
+)
+
 var (
 	ExecutionTime   time.Time
 	DefaultBaseTime time.Time
 )
+
+var LineBreak string
 
 type delta struct {
 	Rocon     time.Duration
@@ -58,6 +71,7 @@ type fileset struct {
 	Ceron  string
 	Ceroff string
 	Keep   bool
+	WithoutList bool
 }
 
 func (f fileset) CanROC() bool {
@@ -101,7 +115,8 @@ func main() {
 	flag.StringVar(&fs.Ceron, "ceron-file", "", "mmia ceron command file")
 	flag.StringVar(&fs.Ceroff, "ceroff-file", "", "mmia ceroff command file")
 	flag.BoolVar(&fs.Keep, "keep-comment", false, "keep comment from command file")
-	file := flag.String("d", "", "write schedule to file")
+	flag.BoolVar(&fs.WithoutList, "no-instr-list", false, "do not create instrument list")
+	datadir := flag.String("datadir", "", "write schedule to file")
 	baseTime := flag.String("base-time", DefaultBaseTime.Format("2006-01-02T15:04:05Z"), "schedule start time")
 	resolution := flag.Duration("resolution", time.Second*10, "prediction accuracy (10s)")
 	flag.Parse()
@@ -136,12 +151,26 @@ func main() {
 	}
 	s = s.Filter(b)
 	var w io.Writer = os.Stdout
-	switch f, err := os.Create(*file); {
-	case err == nil:
+	if i, err := os.Stat(*datadir); err == nil && i.IsDir() {
+		f, err := os.Create(filepath.Join(*datadir, ALLIOP))
+		if err != nil {
+			log.Fatalln(err)
+		}
 		defer f.Close()
+		if !fs.WithoutList {
+			f, err := os.Create(filepath.Join(*datadir, INSTR))
+			if err != nil {
+				log.Fatalln(err)
+			}
+			if fs.CanROC() {
+				io.WriteString(f, InstrMXGS+LineBreak)
+			}
+			if fs.CanCER() {
+				io.WriteString(f, InstrMMIA+LineBreak)
+			}
+			f.Close()
+		}
 		w = f
-	case err != nil && *file != "":
-		log.Fatalln(err)
 	}
 	es, err := s.Schedule(d)
 	if err != nil {
@@ -161,7 +190,10 @@ func main() {
 }
 
 func writeSchedule(w io.Writer, es []*Entry, when time.Time, fs fileset) error {
-	var err error
+	var (
+		err error
+		cid int
+	)
 	for _, e := range es {
 		if e.When.Before(when) {
 			continue
@@ -172,22 +204,22 @@ func writeSchedule(w io.Writer, es []*Entry, when time.Time, fs fileset) error {
 			if !fs.CanROC() {
 				return missingFile("ROC")
 			}
-			delta, err = prepareCommand(w, fs.Rocon, e.When, delta, fs.Keep)
+			cid, delta, err = prepareCommand(w, fs.Rocon, cid, e.When, delta, fs.Keep)
 		case ROCOFF:
 			if !fs.CanROC() {
 				return missingFile("ROC")
 			}
-			delta, err = prepareCommand(w, fs.Rocoff, e.When, delta, fs.Keep)
+			cid, delta, err = prepareCommand(w, fs.Rocoff, cid, e.When, delta, fs.Keep)
 		case CERON:
 			if !fs.CanCER() {
 				return missingFile("CER")
 			}
-			delta, err = prepareCommand(w, fs.Ceron, e.When, delta, fs.Keep)
+			cid, delta, err = prepareCommand(w, fs.Ceron, cid, e.When, delta, fs.Keep)
 		case CEROFF:
 			if !fs.CanCER() {
 				return missingFile("CER")
 			}
-			delta, err = prepareCommand(w, fs.Ceroff, e.When, delta, fs.Keep)
+			cid, delta, err = prepareCommand(w, fs.Ceroff, cid, e.When, delta, fs.Keep)
 		}
 		if err != nil {
 			return err
@@ -200,10 +232,13 @@ func writePreamble(w io.Writer, when time.Time) {
 	year := when.AddDate(0, 0, -when.YearDay()+1).Truncate(Day).Add(Leap)
 	stamp := when.Add(Leap).Truncate(Five)
 
-	io.WriteString(w, fmt.Sprintf("# %s-%s (build: %s)\n", Program, Version, BuildTime))
-	io.WriteString(w, fmt.Sprintf("# execution time: %s\n", ExecutionTime))
-	io.WriteString(w, fmt.Sprintf("# schedule start time: %s (SOY: %d)\n", when, stamp.Unix()-year.Unix()))
-	io.WriteString(w, "#\n")
+	io.WriteString(w, fmt.Sprintf("# %s-%s (build: %s)", Program, Version, BuildTime))
+	io.WriteString(w, LineBreak)
+	io.WriteString(w, fmt.Sprintf("# execution time: %s", ExecutionTime))
+	io.WriteString(w, LineBreak)
+	io.WriteString(w, fmt.Sprintf("# schedule start time: %s (SOY: %d)", when, stamp.Unix()-year.Unix()))
+	io.WriteString(w, LineBreak)
+	io.WriteString(w, "#"+LineBreak)
 }
 
 func writeMetadata(w io.Writer, rs string, fs fileset) error {
@@ -226,25 +261,27 @@ func writeMetadata(w io.Writer, rs string, fs fileset) error {
 			return err
 		}
 		mod := s.ModTime().Format("2006-02-01 15:04:05")
-		row := fmt.Sprintf("# %s: md5 = %x, lastmod: %s, size (bytes): %d\n", f, digest.Sum(nil), mod, s.Size())
+		row := fmt.Sprintf("# %s: md5 = %x, lastmod: %s, size (bytes): %d", f, digest.Sum(nil), mod, s.Size())
 		io.WriteString(w, row)
+		io.WriteString(w, LineBreak)
 		digest.Reset()
 	}
-	io.WriteString(w, "#\n")
+	io.WriteString(w, "#")
+	io.WriteString(w, LineBreak)
 	return nil
 }
 
-func prepareCommand(w io.Writer, file string, when time.Time, delta time.Duration, keep bool) (time.Duration, error) {
+func prepareCommand(w io.Writer, file string, cid int, when time.Time, delta time.Duration, keep bool) (int, time.Duration, error) {
 	if file == "" {
-		return 0, nil
+		return cid, 0, nil
 	}
 	bs, err := ioutil.ReadFile(file)
 	if err != nil {
-		return 0, err
+		return cid, 0, err
 	}
 	d := scheduleDuration(bytes.NewReader(bs))
 	if d <= 0 {
-		return 0, nil
+		return cid, 0, nil
 	}
 
 	s := bufio.NewScanner(bytes.NewReader(bs))
@@ -253,8 +290,10 @@ func prepareCommand(w io.Writer, file string, when time.Time, delta time.Duratio
 
 	var elapsed time.Duration
 	if keep {
-		io.WriteString(w, "#\n")
-		io.WriteString(w, fmt.Sprintf("# %s: %s (execution time: %s)\n", file, when.Format(timeFormat), d))
+		io.WriteString(w, "#")
+		io.WriteString(w, LineBreak)
+		io.WriteString(w, fmt.Sprintf("# %s: %s (execution time: %s)", file, when.Format(timeFormat), d))
+		io.WriteString(w, LineBreak)
 	}
 	for s.Scan() {
 		row := s.Text()
@@ -266,13 +305,19 @@ func prepareCommand(w io.Writer, file string, when time.Time, delta time.Duratio
 		} else {
 			// stamp := w.Add(DIFF+Leap).Truncate(step)
 			stamp := when.Add(Leap).Truncate(Five)
-			io.WriteString(w, fmt.Sprintf("# SOY (GPS): %d/ GMT %3d/%s\n", stamp.Unix()-year.Unix(), stamp.YearDay(), stamp.Format("15:04:05")))
+			io.WriteString(w, fmt.Sprintf("# SOY (GPS): %d/ GMT %3d/%s", stamp.Unix()-year.Unix(), stamp.YearDay(), stamp.Format("15:04:05")))
+			io.WriteString(w, LineBreak)
+		}
+		if keep && strings.HasPrefix(row, "#") {
+			row = fmt.Sprintf("# CMD %d: %s", cid, strings.TrimPrefix(row, "#"))
+			cid++
 		}
 		if keep || !strings.HasPrefix(row, "#") {
-			io.WriteString(w, row+"\n")
+			io.WriteString(w, row)
+			io.WriteString(w, LineBreak)
 		}
 	}
-	return elapsed, s.Err()
+	return cid, elapsed, s.Err()
 }
 
 func scheduleDuration(r io.Reader) time.Duration {
