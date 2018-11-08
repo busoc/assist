@@ -110,6 +110,7 @@ func (d *Duration) Set(v string) error {
 
 type command struct {
 	File     string   `toml:"file"`
+	AZM      Duration `toml:"azm"`
 	Time     Duration `toml:"time"`
 	Night    Duration `toml:"wait"`
 	Crossing Duration `toml:"intersection"`
@@ -125,10 +126,9 @@ type trajectory struct {
 }
 
 type cerroc struct {
-	AZM    int         `toml:"azm"`
 	Alliop string      `toml:"alliop"`
 	Instr  string      `toml:"instrlist"`
-	Keep   bool        `toml:"keep"`
+	Keep   bool        `toml:"keep-comment"`
 	Ceron  *command    `toml:"ceron"`
 	Ceroff *command    `toml:"ceroff"`
 	Rocon  *command    `toml:"rocon"`
@@ -157,6 +157,7 @@ func main() {
 	baseTime := flag.String("base-time", DefaultBaseTime.Format("2006-01-02T15:04:05Z"), "schedule start time")
 	resolution := flag.Duration("resolution", time.Second*10, "prediction accuracy")
 	config := flag.Bool("config", false, "use configuration file")
+	list := flag.Bool("list", false, "schedule list")
 	flag.Parse()
 
 	b, err := time.Parse(time.RFC3339, *baseTime)
@@ -180,7 +181,7 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	if fs.Empty() {
+	if *list {
 		es, err := s.Schedule(d, true, true)
 		if err != nil {
 			log.Fatalln(err)
@@ -190,6 +191,9 @@ func main() {
 			log.Printf("%3d | %7s | %s", i+1, e.Label, e.When.Truncate(time.Second).Format(timeFormat))
 		}
 		return
+	}
+	if fs.Empty() {
+		log.Fatalln("no command files provided")
 	}
 	s = s.Filter(b)
 	var w io.Writer = os.Stdout
