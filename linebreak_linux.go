@@ -1,5 +1,5 @@
 package main
 
 func init() {
-  LineBreak = "\n"
+	LineBreak = "\n"
 }

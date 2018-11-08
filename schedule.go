@@ -24,8 +24,8 @@ type Entry struct {
 }
 
 type Schedule struct {
-  Eclipses []*Period
-  Saas     []*Period
+	Eclipses []*Period
+	Saas     []*Period
 }
 
 func Open(p string, d time.Duration) (*Schedule, error) {
@@ -39,14 +39,14 @@ func Open(p string, d time.Duration) (*Schedule, error) {
 
 func OpenReader(r io.Reader, d time.Duration) (*Schedule, error) {
 	var (
-    s Schedule
-    err error
-  )
-  s.Eclipses, s.Saas, err = listPeriods(r, d)
-  if err != nil {
-    return nil, err
-  }
-  return &s, nil
+		s   Schedule
+		err error
+	)
+	s.Eclipses, s.Saas, err = listPeriods(r, d)
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
 }
 
 func (s *Schedule) Filter(t time.Time) *Schedule {
@@ -64,20 +64,27 @@ func (s *Schedule) Filter(t time.Time) *Schedule {
 	return &Schedule{es, as}
 }
 
-func (s *Schedule) Schedule(d delta) ([]*Entry, error) {
-  var es []*Entry
-	if vs, err := s.scheduleMXGS(d.Rocon, d.Rocoff, d.Wait, d.AZM); err != nil {
-		return nil, err
-	} else {
-		es = append(es, vs...)
+func (s *Schedule) Schedule(d delta, roc, cer bool) ([]*Entry, error) {
+	if !roc && !cer {
+		return nil, nil
 	}
-	if vs, err := s.scheduleMMIA(d.Cer, d.Intersect); err != nil {
-		return nil, err
-	} else {
-		es = append(es, vs...)
+	var es []*Entry
+	if roc {
+		if vs, err := s.scheduleMXGS(d.Rocon, d.Rocoff, d.Wait, d.AZM); err != nil {
+			return nil, err
+		} else {
+			es = append(es, vs...)
+		}
+	}
+	if cer {
+		if vs, err := s.scheduleMMIA(d.Cer, d.Intersect); err != nil {
+			return nil, err
+		} else {
+			es = append(es, vs...)
+		}
 	}
 	sort.Slice(es, func(i, j int) bool { return es[i].When.Before(es[j].When) })
-  return es, nil
+	return es, nil
 }
 
 func (s *Schedule) scheduleMXGS(on, off, wait, azm time.Duration) ([]*Entry, error) {
@@ -246,7 +253,7 @@ func listPeriods(r io.Reader, resolution time.Duration) ([]*Period, []*Period, e
 
 	var (
 		e, a, z Period
-		es, as []*Period
+		es, as  []*Period
 	)
 	for i := 0; ; i++ {
 		r, err := rs.Read()
