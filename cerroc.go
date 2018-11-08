@@ -96,22 +96,32 @@ func init() {
 	log.SetFlags(0)
 }
 
-type command struct {
-	File     string `toml:"file"`
-	Time     int    `toml:"time"`
-	Night    int    `toml:"wait"`
-	Step     int    `toml:"step"`
-	Crossing int    `toml:"intersection"`
+type Duration struct {
+	time.Duration
+}
 
-	Execution time.Duration `toml:"-"`
+func (d *Duration) Set(v string) error {
+	i, err := time.ParseDuration(v)
+	if err == nil {
+		d.Duration = i
+	}
+	return err
+}
+
+type command struct {
+	File     string   `toml:"file"`
+	Time     Duration `toml:"time"`
+	Night    Duration `toml:"wait"`
+	Crossing Duration `toml:"intersection"`
+	Step     int      `toml:"step"`
 }
 
 type trajectory struct {
-	File    string `toml:"time"`
-	Step    int `toml:"resolution"`
-	Time    int `toml:"time"`
-	Eclipse int `toml:"eclipse"`
-	Saa     int `toml:"saa"`
+	File    string   `toml:"time"`
+	Step    Duration `toml:"resolution"`
+	Time    int      `toml:"time"`
+	Eclipse int      `toml:"eclipse"`
+	Saa     int      `toml:"saa"`
 }
 
 type cerroc struct {
@@ -236,10 +246,8 @@ func loadScheduleFromConfig(file string) (*Schedule, error) {
 }
 
 func writeSchedule(w io.Writer, es []*Entry, when time.Time, fs fileset) error {
-	var (
-		err error
-		cid int
-	)
+	cid := 1
+	var err error
 	for _, e := range es {
 		if e.When.Before(when) {
 			continue
