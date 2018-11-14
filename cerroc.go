@@ -20,8 +20,8 @@ const timeFormat = "2006-01-02T15:04:05.000000"
 const Leap = 18 * time.Second
 
 const (
-	Version   = "0.1.0-beta"
-	BuildTime = "2018-10-11 06:52:00"
+	Version   = "0.1.0-RC1"
+	BuildTime = "2018-11-14 08:11:00"
 	Program   = "assist"
 )
 
