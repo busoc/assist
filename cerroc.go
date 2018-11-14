@@ -5,14 +5,16 @@ import (
 	"bytes"
 	"crypto/md5"
 	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/midbel/toml"
 )
 
 const timeFormat = "2006-01-02T15:04:05.000000"
@@ -66,11 +68,11 @@ type delta struct {
 }
 
 type fileset struct {
-	Rocon  string
-	Rocoff string
-	Ceron  string
-	Ceroff string
-	Keep   bool
+	Rocon       string
+	Rocoff      string
+	Ceron       string
+	Ceroff      string
+	Keep        bool
 	WithoutList bool
 }
 
@@ -94,31 +96,68 @@ func init() {
 	log.SetFlags(0)
 }
 
-func main() {
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "ASIM semi automatic schedule generator tool\n")
-		fmt.Fprintf(os.Stderr, "assist [-keep-comment] [-resolution] [-azm] [-rocon-time] [-rocoff-time] [-cer-time] [-cer-cross] <trajectory>\n")
-		os.Exit(2)
+type Duration struct {
+	time.Duration
+}
+
+func (d *Duration) Set(v string) error {
+	i, err := time.ParseDuration(v)
+	if err == nil {
+		d.Duration = i
 	}
+	return err
+}
+
+type command struct {
+	File     string   `toml:"file"`
+	AZM      Duration `toml:"azm"`
+	Time     Duration `toml:"time"`
+	Night    Duration `toml:"wait"`
+	Crossing Duration `toml:"intersection"`
+	Step     int      `toml:"step"`
+}
+
+type trajectory struct {
+	File    string   `toml:"time"`
+	Step    Duration `toml:"resolution"`
+	Time    int      `toml:"time"`
+	Eclipse int      `toml:"eclipse"`
+	Saa     int      `toml:"saa"`
+}
+
+type cerroc struct {
+	Alliop string      `toml:"alliop"`
+	Instr  string      `toml:"instrlist"`
+	Keep   bool        `toml:"keep-comment"`
+	Ceron  *command    `toml:"ceron"`
+	Ceroff *command    `toml:"ceroff"`
+	Rocon  *command    `toml:"rocon"`
+	Rocoff *command    `toml:"rocoff"`
+	Path   *trajectory `toml:"trajectory"`
+}
+
+func main() {
 	var (
 		d  delta
 		fs fileset
 	)
-	flag.DurationVar(&d.Rocon, "rocon-time", 50*time.Second, "delta ROC margin time (50s)")
-	flag.DurationVar(&d.Rocoff, "rocoff-time", 80*time.Second, "delta ROC margin time (80s)")
-	flag.DurationVar(&d.Wait, "rocon-wait", 90*time.Second, "wait time before starting ROC (90s)")
-	flag.DurationVar(&d.Cer, "cer-time", 300*time.Second, "delta CER margin time (300s)")
-	flag.DurationVar(&d.Intersect, "cer-crossing", DefaultIntersectTime, "intersection time (120s)")
-	flag.DurationVar(&d.AZM, "azm", 40*time.Second, "default AZM duration (40s)")
+	flag.DurationVar(&d.Rocon, "rocon-time", 50*time.Second, "ROCON execution time")
+	flag.DurationVar(&d.Rocoff, "rocoff-time", 80*time.Second, "ROCOFF execution time")
+	flag.DurationVar(&d.Wait, "rocon-wait", 90*time.Second, "wait time before starting ROCON")
+	flag.DurationVar(&d.Cer, "cer-time", 300*time.Second, "delta CER margin time")
+	flag.DurationVar(&d.Intersect, "cer-crossing", DefaultIntersectTime, "intersection time to enable CER")
+	flag.DurationVar(&d.AZM, "azm", 40*time.Second, "default AZM duration")
 	flag.StringVar(&fs.Rocon, "rocon-file", "", "mxgs rocon command file")
 	flag.StringVar(&fs.Rocoff, "rocoff-file", "", "mxgs rocoff command file")
 	flag.StringVar(&fs.Ceron, "ceron-file", "", "mmia ceron command file")
 	flag.StringVar(&fs.Ceroff, "ceroff-file", "", "mmia ceroff command file")
 	flag.BoolVar(&fs.Keep, "keep-comment", false, "keep comment from command file")
 	flag.BoolVar(&fs.WithoutList, "no-instr-list", false, "do not create instrument list")
-	datadir := flag.String("datadir", "", "write schedule to file")
+	datadir := flag.String("datadir", "", "write alliop and instrlist to directory")
 	baseTime := flag.String("base-time", DefaultBaseTime.Format("2006-01-02T15:04:05Z"), "schedule start time")
-	resolution := flag.Duration("resolution", time.Second*10, "prediction accuracy (10s)")
+	resolution := flag.Duration("resolution", time.Second*10, "prediction accuracy")
+	config := flag.Bool("config", false, "use configuration file")
+	list := flag.Bool("list", false, "schedule list")
 	flag.Parse()
 
 	b, err := time.Parse(time.RFC3339, *baseTime)
@@ -129,17 +168,21 @@ func main() {
 		b = DefaultBaseTime
 	}
 	var s *Schedule
-	switch flag.NArg() {
-	default:
-		s, err = Open(flag.Arg(0), *resolution)
-	case 0:
-		s, err = OpenReader(os.Stdin, *resolution)
+	if *config {
+		s, err = loadScheduleFromConfig(flag.Arg(0))
+	} else {
+		switch flag.NArg() {
+		default:
+			s, err = Open(flag.Arg(0), *resolution)
+		case 0:
+			s, err = OpenReader(os.Stdin, *resolution)
+		}
 	}
 	if err != nil {
 		log.Fatalln(err)
 	}
-	if fs.Empty() {
-		es, err := s.Schedule(d)
+	if *list {
+		es, err := s.Schedule(d, true, true)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -148,6 +191,9 @@ func main() {
 			log.Printf("%3d | %7s | %s", i+1, e.Label, e.When.Truncate(time.Second).Format(timeFormat))
 		}
 		return
+	}
+	if fs.Empty() {
+		log.Fatalln("no command files provided")
 	}
 	s = s.Filter(b)
 	var w io.Writer = os.Stdout
@@ -172,14 +218,14 @@ func main() {
 		}
 		w = f
 	}
-	es, err := s.Schedule(d)
+	es, err := s.Schedule(d, fs.CanROC(), fs.CanCER())
 	if err != nil {
 		log.Fatalln(err)
 	}
 	if len(es) == 0 {
 		return
 	}
-	b = es[0].When.Add(-time.Second*5)
+	b = es[0].When.Add(-time.Second * 5)
 	writePreamble(w, b)
 	if err := writeMetadata(w, flag.Arg(0), fs); err != nil {
 		log.Fatalln(err)
@@ -189,11 +235,23 @@ func main() {
 	}
 }
 
+func loadScheduleFromConfig(file string) (*Schedule, error) {
+	r, err := os.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+
+	c := struct{}{}
+	if err := toml.NewDecoder(r).Decode(&c); err != nil {
+		return nil, err
+	}
+	return nil, fmt.Errorf("not yet implemented")
+}
+
 func writeSchedule(w io.Writer, es []*Entry, when time.Time, fs fileset) error {
-	var (
-		err error
-		cid int
-	)
+	cid := 1
+	var err error
 	for _, e := range es {
 		if e.When.Before(when) {
 			continue
