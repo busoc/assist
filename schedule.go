@@ -35,7 +35,7 @@ type Entry struct {
 func (e Entry) SOY() int64 {
 	year := e.When.AddDate(0, 0, -e.When.YearDay()+1).Truncate(Day).Add(Leap)
 	stamp := e.When.Add(Leap)
-	return stamp.Unix()-year.Unix()
+	return stamp.Unix() - year.Unix()
 }
 
 type Schedule struct {

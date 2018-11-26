@@ -93,13 +93,25 @@ Options:
   -ceroff-file    FILE  use FILE with commands for CEROFF
   -resolution     TIME  TIME interval between two rows in the trajectory
   -base-time      DATE
-  -datadir        DIR   use DIR to save alliop.txt and instrlist.txt
+  -datadir        DIR   save alliop.txt and instrlist.txt into DIR
   -no-instr-list        do not create instrlist.txt file
   -keep-comment         keep comment (if any) from command files
   -list                 print the list of commands instead of creating a schedule
   -config               load settings from a configuration file
 
 Examples:
+
+# create a full schedule keeping the comments from the given command files with
+a longer AZM for ROCON/ROCOFF and a larger margin for CERON/CEROFF
+$ assist -keep-comment -base-time 2018-11-19T12:35:00Z \
+    -rocon-file /usr/local/etc/asim/MXGS-ROCON.txt \
+    -rocoff-file /usr/local/etc/asim/MXGS-ROCOFF.txt \
+    -ceron-file /usr/local/etc/asim/MMIA-CERON.txt \
+    -ceroff-file /usr/local/etc/asim/MMIA-CEROFF.txt \
+		-azm 80s \
+		-cer-time 900s \
+		-datadir /var/asim/2018-310/ \
+		inspect-trajectory.csv
 
 # print the list of commands that could be scheduled from a local file
 $ assist -list tmp/inspect-trajectory.csv
@@ -266,7 +278,7 @@ func writePreamble(w io.Writer, when time.Time) {
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "# execution time: %s", ExecutionTime)
 	fmt.Fprintln(w)
-	fmt.Fprintf(w, "# schedule start time: %s (SOY: %d)", when, (stamp.Unix()-year.Unix()) + int64(Leap.Seconds()))
+	fmt.Fprintf(w, "# schedule start time: %s (SOY: %d)", when, (stamp.Unix()-year.Unix())+int64(Leap.Seconds()))
 	fmt.Fprintln(w)
 	fmt.Fprintln(w)
 }
@@ -328,8 +340,8 @@ func prepareCommand(w io.Writer, file string, cid int, when time.Time, delta tim
 			elapsed += Five
 			when = when.Add(Five)
 		} else {
-			stamp := when//.Truncate(Five)
-			soy := (stamp.Unix()-year.Unix()) + int64(Leap.Seconds())
+			stamp := when //.Truncate(Five)
+			soy := (stamp.Unix() - year.Unix()) + int64(Leap.Seconds())
 			fmt.Fprintf(w, "# SOY (GPS): %d/ GMT %03d/%s", soy, stamp.YearDay(), stamp.Format("15:04:05"))
 			fmt.Fprintln(w)
 		}
