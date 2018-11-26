@@ -75,12 +75,53 @@ func (f fileset) Empty() bool {
 	return f.Rocon == "" && f.Rocoff == "" && f.Ceron == "" && f.Ceroff == ""
 }
 
+const helpText = `ASIM Semi Automatic Schedule Tool
+
+Usage: assist [options] <trajectory.csv>
+
+Options:
+
+  -rocon-time     TIME  ROCON expected execution time
+  -rocoff-time    TIME  ROCOFF expected execution time
+  -rocon-wait     TIME  wait TIME after entering Eclipse before starting ROCON
+  -cer-time       TIME  TIME before Eclipse to switch CER(ON|OFF)
+  -cer-crossing   TIME  minimum crossing time of SAA and Eclipse to switch CER(ON|OFF)
+  -azm            TIME  AZM duration
+  -rocon-file     FILE  use FILE with commands for ROCON
+  -rocoff-file    FILE  use FILE with commands for ROCOFF
+  -ceron-file     FILE  use FILE with commands for CERON
+  -ceroff-file    FILE  use FILE with commands for CEROFF
+  -resolution     TIME  TIME interval between two rows in the trajectory
+  -base-time      DATE
+  -datadir        DIR   use DIR to save alliop.txt and instrlist.txt
+  -no-instr-list        do not create instrlist.txt file
+  -keep-comment         keep comment (if any) from command files
+  -list                 print the list of commands instead of creating a schedule
+  -config               load settings from a configuration file
+
+Examples:
+
+# print the list of commands that could be scheduled from a local file
+$ assist -list tmp/inspect-trajectory.csv
+
+# print the list of commands that could be scheduled from the output of inspect
+$ inspect -d 24h -i 10s -f csv /tmp/tle-2018305.txt | assist -list
+
+# use a configuration file instead of command line options
+$ assist -config /usr/local/etc/asim/cerroc-ops.toml
+`
+
 func init() {
 	ExecutionTime = time.Now().Truncate(time.Second).UTC()
 	DefaultBaseTime = ExecutionTime.Add(Day).Truncate(Day).Add(time.Hour * 10)
 
 	log.SetOutput(os.Stderr)
 	log.SetFlags(0)
+
+	flag.Usage = func() {
+		fmt.Fprintln(os.Stderr, helpText)
+		os.Exit(2)
+	}
 }
 
 func main() {
