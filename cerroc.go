@@ -79,6 +79,42 @@ const helpText = `ASIM Semi Automatic Schedule Tool
 
 Usage: assist [options] <trajectory.csv>
 
+Command files:
+
+assist accepts command files by pair. In other words, if the ROCON file is given,
+the ROCOFF should also be provided. The same is true for the CERON/CEROFF files.
+
+However, it is not mandatory to have the 4 files provided. A schedule can be
+created only for ROC or for CER (see examples below).
+
+It is an error to not provide any file unless if the list flag is given to assist.
+
+Input format:
+
+the input of assist consists of a tabulated "file". The columns of the file are:
+
+- datetime (YYYY-mm-dd HH:MM:SS.ssssss)
+- modified julian day
+- altitude (kilometer)
+- latitude (degree or DMS)
+- longitude (degree or DMS)
+- eclipse (1: night, 0: day)
+- crossing (1: crossing, 0: no crossing)
+- TLE epoch
+
+assist only uses the columns from the input file (but all are mandatory even if
+empty):
+
+- datetime
+- eclipse
+- crossing
+
+the values accepted by assist to decide if the trajectory is "entering" SAA/
+Eclipse, are: 1, on, true
+
+the values accepted by assist to decide if the trajectory is "leaving" SAA/
+Eclipse are: 0, off, false
+
 Options:
 
   -rocon-time     TIME  ROCON expected execution time
@@ -104,14 +140,22 @@ Examples:
 # create a full schedule keeping the comments from the given command files with
 a longer AZM for ROCON/ROCOFF and a larger margin for CERON/CEROFF
 $ assist -keep-comment -base-time 2018-11-19T12:35:00Z \
-    -rocon-file /usr/local/etc/asim/MXGS-ROCON.txt \
-    -rocoff-file /usr/local/etc/asim/MXGS-ROCOFF.txt \
-    -ceron-file /usr/local/etc/asim/MMIA-CERON.txt \
-    -ceroff-file /usr/local/etc/asim/MMIA-CEROFF.txt \
-		-azm 80s \
-		-cer-time 900s \
-		-datadir /var/asim/2018-310/ \
-		inspect-trajectory.csv
+  -rocon-file /usr/local/etc/asim/MXGS-ROCON.txt \
+  -rocoff-file /usr/local/etc/asim/MXGS-ROCOFF.txt \
+  -ceron-file /usr/local/etc/asim/MMIA-CERON.txt \
+  -ceroff-file /usr/local/etc/asim/MMIA-CEROFF.txt \
+  -azm 80s \
+  -cer-time 900s \
+  -datadir /var/asim/2018-310/ \
+  inspect-trajectory.csv
+
+# create a schedule only for CER (the same can be done for ROC).
+$ assist -keep-comment -base-time 2018-11-19T12:35:00Z \
+  -ceron-file /usr/local/etc/asim/MMIA-CERON.txt \
+  -ceroff-file /usr/local/etc/asim/MMIA-CEROFF.txt \
+  -cer-time 900s \
+  -datadir /var/asim/CER-2018-310/ \
+  inspect-trajectory.csv
 
 # print the list of commands that could be scheduled from a local file
 $ assist -list tmp/inspect-trajectory.csv
