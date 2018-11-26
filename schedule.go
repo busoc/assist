@@ -18,9 +18,24 @@ const (
 	PredictComment      = '#'
 )
 
+const Leap = 18 * time.Second
+
+const (
+	DefaultDeltaTime     = time.Second * 30
+	DefaultIntersectTime = time.Second * 120
+	Day                  = time.Hour * 24
+	Five                 = time.Second * 5
+)
+
 type Entry struct {
 	When  time.Time
 	Label string
+}
+
+func (e Entry) SOY() int64 {
+	year := e.When.AddDate(0, 0, -e.When.YearDay()+1).Truncate(Day).Add(Leap)
+	stamp := e.When.Add(Leap)
+	return stamp.Unix()-year.Unix()
 }
 
 type Schedule struct {
@@ -183,7 +198,6 @@ func scheduleROCON(e, s *Period, on, wait, azm time.Duration) *Entry {
 	end := start.Add(on)
 
 	y := &Entry{Label: ROCON, When: start}
-	// no SAA crossing
 	if s == nil {
 		return y
 	}
@@ -194,19 +208,9 @@ func scheduleROCON(e, s *Period, on, wait, azm time.Duration) *Entry {
 		}
 		return y
 	}
-	// if z := s.Starts.Add(azm); isBetween(start, end, s.Starts) || isBetween(start, end, z) {
-	// 	y.When = z
-	// 	if s.Ends.Sub(y.When) < on {
-	// 		y.When = s.Ends.Add(azm)
-	// 	}
-	// 	return y
-	// }
 	if z := s.Ends.Add(azm); z.After(start) && s.Ends.Before(end) {
 		y.When = z
 	}
-	// if z := s.Ends.Add(azm); isBetween(start, end, s.Ends) || isBetween(start, end, z) {
-	// 	y.When = z
-	// }
 	return y
 }
 
@@ -222,18 +226,10 @@ func scheduleROCOFF(e, s *Period, off, azm time.Duration) *Entry {
 		y.When = s.Starts.Add(-off)
 		return y
 	}
-	// if z := s.Starts.Add(azm); isBetween(start, end, s.Starts) || isBetween(start, end, z) {
-	// 	y.When = s.Starts.Add(-off)
-	// 	return y
-	// }
 	if z := s.Ends.Add(azm); z.After(start) && s.Ends.Before(end) {
 		y.When = s.Starts.Add(-off)
 		return y
 	}
-	// if z := s.Ends.Add(azm); isBetween(start, end, s.Ends) || isBetween(start, end, z) {
-	// 	y.When = s.Ends.Add(-off)
-	// 	return y
-	// }
 	return y
 }
 

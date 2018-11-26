@@ -5,9 +5,9 @@ import (
 	"bytes"
 	"crypto/md5"
 	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -17,19 +17,10 @@ import (
 
 const timeFormat = "2006-01-02T15:04:05.000000"
 
-const Leap = 18 * time.Second
-
 const (
-	Version   = "0.1.0-RC1"
-	BuildTime = "2018-11-14 08:11:00"
+	Version   = "0.1.0-beta"
+	BuildTime = "2018-11-26 06:35:00"
 	Program   = "assist"
-)
-
-const (
-	DefaultDeltaTime     = time.Second * 30
-	DefaultIntersectTime = time.Second * 120
-	Day                  = time.Hour * 24
-	Five                 = time.Second * 5
 )
 
 const (
@@ -40,8 +31,8 @@ const (
 )
 
 const (
-	ALLIOP = "alliop"
-	INSTR  = "instrlist"
+	ALLIOP = "alliop.txt"
+	INSTR  = "instrlist.txt"
 )
 
 const (
@@ -54,8 +45,6 @@ var (
 	DefaultBaseTime time.Time
 )
 
-var LineBreak string
-
 type delta struct {
 	Rocon     time.Duration
 	Rocoff    time.Duration
@@ -66,11 +55,11 @@ type delta struct {
 }
 
 type fileset struct {
-	Rocon  string
-	Rocoff string
-	Ceron  string
-	Ceroff string
-	Keep   bool
+	Rocon       string
+	Rocoff      string
+	Ceron       string
+	Ceroff      string
+	Keep        bool
 	WithoutList bool
 }
 
@@ -95,39 +84,28 @@ func init() {
 }
 
 func main() {
-	// flag.Usage = func() {
-	// 	fmt.Fprintf(os.Stderr, "ASIM semi automatic schedule generator tool\n")
-	// 	fmt.Fprintf(os.Stderr, "assist [-keep-comment] [-resolution] [-azm] [-rocon-time] [-rocoff-time] [-cer-time] [-cer-cross] <trajectory>\n")
-	// 	os.Exit(2)
-	// }
 	var (
 		d  delta
 		fs fileset
 	)
-	flag.DurationVar(&d.Rocon, "rocon-time", 50*time.Second, "delta ROC margin time (50s)")
-	flag.DurationVar(&d.Rocoff, "rocoff-time", 80*time.Second, "delta ROC margin time (80s)")
-	flag.DurationVar(&d.Wait, "rocon-wait", 90*time.Second, "wait time before starting ROC (90s)")
-	flag.DurationVar(&d.Cer, "cer-time", 300*time.Second, "delta CER margin time (300s)")
-	flag.DurationVar(&d.Intersect, "cer-crossing", DefaultIntersectTime, "intersection time (120s)")
-	flag.DurationVar(&d.AZM, "azm", 40*time.Second, "default AZM duration (40s)")
+	flag.DurationVar(&d.Rocon, "rocon-time", 50*time.Second, "ROCON execution time")
+	flag.DurationVar(&d.Rocoff, "rocoff-time", 80*time.Second, "ROCOFF execution time")
+	flag.DurationVar(&d.Wait, "rocon-wait", 90*time.Second, "wait time before starting ROCON")
+	flag.DurationVar(&d.Cer, "cer-time", 300*time.Second, "delta CER margin time")
+	flag.DurationVar(&d.Intersect, "cer-crossing", DefaultIntersectTime, "intersection time to enable CER")
+	flag.DurationVar(&d.AZM, "azm", 40*time.Second, "default AZM duration")
 	flag.StringVar(&fs.Rocon, "rocon-file", "", "mxgs rocon command file")
 	flag.StringVar(&fs.Rocoff, "rocoff-file", "", "mxgs rocoff command file")
 	flag.StringVar(&fs.Ceron, "ceron-file", "", "mmia ceron command file")
 	flag.StringVar(&fs.Ceroff, "ceroff-file", "", "mmia ceroff command file")
 	flag.BoolVar(&fs.Keep, "keep-comment", false, "keep comment from command file")
 	flag.BoolVar(&fs.WithoutList, "no-instr-list", false, "do not create instrument list")
-	datadir := flag.String("datadir", "", "write schedule to file")
+	datadir := flag.String("datadir", "", "write alliop and instrlist to directory")
 	baseTime := flag.String("base-time", DefaultBaseTime.Format("2006-01-02T15:04:05Z"), "schedule start time")
-	resolution := flag.Duration("resolution", time.Second*10, "prediction accuracy (10s)")
-	version := flag.Bool("version", false, "print version and exits")
-	list := flag.Bool("list", false, "list")
+	resolution := flag.Duration("resolution", time.Second*10, "prediction accuracy")
+	// config := flag.Bool("config", false, "use configuration file")
+	list := flag.Bool("list", false, "schedule list")
 	flag.Parse()
-
-	if *version {
-		fmt.Printf("%s %s (%s)", Program, Version, BuildTime)
-		fmt.Println()
-		os.Exit(0)
-	}
 
 	b, err := time.Parse(time.RFC3339, *baseTime)
 	if err != nil && *baseTime != "" {
@@ -147,20 +125,22 @@ func main() {
 		log.Fatalln(err)
 	}
 	if *list {
+		if !b.Equal(DefaultBaseTime) {
+			s = s.Filter(b)
+		}
 		es, err := s.Schedule(d, true, true)
 		if err != nil {
 			log.Fatalln(err)
 		}
 		log.SetOutput(os.Stdout)
 		for i, e := range es {
-			log.Printf("%3d | %7s | %s", i+1, e.Label, e.When.Truncate(time.Second).Format(timeFormat))
+			log.Printf("%3d | %-7s | %s | %d", i+1, e.Label, e.When.Format("2006-01-02T15:04:05"), e.SOY())
 		}
 		return
 	}
 	if fs.Empty() {
-		log.Fatalln("no command files given")
+		log.Fatalln("no command files provided")
 	}
-	s = s.Filter(b)
 	var w io.Writer = os.Stdout
 	if i, err := os.Stat(*datadir); err == nil && i.IsDir() {
 		f, err := os.Create(filepath.Join(*datadir, ALLIOP))
@@ -174,23 +154,23 @@ func main() {
 				log.Fatalln(err)
 			}
 			if fs.CanROC() {
-				io.WriteString(f, InstrMXGS+LineBreak)
+				fmt.Fprintln(f, InstrMXGS)
 			}
 			if fs.CanCER() {
-				io.WriteString(f, InstrMMIA+LineBreak)
+				fmt.Fprintln(f, InstrMMIA)
 			}
 			f.Close()
 		}
 		w = f
 	}
-	es, err := s.Schedule(d, fs.CanROC(), fs.CanCER())
+	es, err := s.Filter(b).Schedule(d, fs.CanROC(), fs.CanCER())
 	if err != nil {
 		log.Fatalln(err)
 	}
 	if len(es) == 0 {
 		return
 	}
-	b = es[0].When.Add(-time.Second*5)
+	b = es[0].When.Add(-Five)
 	writePreamble(w, b)
 	if err := writeMetadata(w, flag.Arg(0), fs); err != nil {
 		log.Fatalln(err)
@@ -201,8 +181,8 @@ func main() {
 }
 
 func writeSchedule(w io.Writer, es []*Entry, when time.Time, fs fileset) error {
-	var err error
 	cid := 1
+	var err error
 	for _, e := range es {
 		if e.When.Before(when) {
 			continue
@@ -239,15 +219,15 @@ func writeSchedule(w io.Writer, es []*Entry, when time.Time, fs fileset) error {
 
 func writePreamble(w io.Writer, when time.Time) {
 	year := when.AddDate(0, 0, -when.YearDay()+1).Truncate(Day).Add(Leap)
-	stamp := when.Add(Leap).Truncate(Five)
+	stamp := when.Add(Leap)
 
-	io.WriteString(w, fmt.Sprintf("# %s-%s (build: %s)", Program, Version, BuildTime))
-	io.WriteString(w, LineBreak)
-	io.WriteString(w, fmt.Sprintf("# execution time: %s", ExecutionTime))
-	io.WriteString(w, LineBreak)
-	io.WriteString(w, fmt.Sprintf("# schedule start time: %s (SOY: %d)", when, stamp.Unix()-year.Unix()))
-	io.WriteString(w, LineBreak)
-	io.WriteString(w, "#"+LineBreak)
+	fmt.Fprintf(w, "# %s-%s (build: %s)", Program, Version, BuildTime)
+	fmt.Fprintln(w)
+	fmt.Fprintf(w, "# execution time: %s", ExecutionTime)
+	fmt.Fprintln(w)
+	fmt.Fprintf(w, "# schedule start time: %s (SOY: %d)", when, (stamp.Unix()-year.Unix()) + int64(Leap.Seconds()))
+	fmt.Fprintln(w)
+	fmt.Fprintln(w)
 }
 
 func writeMetadata(w io.Writer, rs string, fs fileset) error {
@@ -269,14 +249,12 @@ func writeMetadata(w io.Writer, rs string, fs fileset) error {
 		if err != nil {
 			return err
 		}
-		mod := s.ModTime().Format("2006-02-01 15:04:05")
-		row := fmt.Sprintf("# %s: md5 = %x, lastmod: %s, size (bytes): %d", f, digest.Sum(nil), mod, s.Size())
-		io.WriteString(w, row)
-		io.WriteString(w, LineBreak)
+		mod := s.ModTime().Format("2006-01-02 15:04:05")
+		fmt.Fprintf(w, "# %s: md5 = %x, lastmod: %s, size (bytes): %d", f, digest.Sum(nil), mod, s.Size())
+		fmt.Fprintln(w)
 		digest.Reset()
 	}
-	io.WriteString(w, "#")
-	io.WriteString(w, LineBreak)
+	fmt.Fprintln(w)
 	return nil
 }
 
@@ -294,15 +272,12 @@ func prepareCommand(w io.Writer, file string, cid int, when time.Time, delta tim
 	}
 
 	s := bufio.NewScanner(bytes.NewReader(bs))
-	// year := time.Date(w.Year(), 1, 1, 0, 0, 0, 0, time.UTC).Add(DIFF+Leap)
-	year := when.AddDate(0, 0, -when.YearDay()+1).Truncate(Day).Add(Leap)
+	year := when.AddDate(0, 0, -when.YearDay()+1).Truncate(Day)
 
 	var elapsed time.Duration
 	if keep {
-		io.WriteString(w, "#")
-		io.WriteString(w, LineBreak)
-		io.WriteString(w, fmt.Sprintf("# %s: %s (execution time: %s)", file, when.Format(timeFormat), d))
-		io.WriteString(w, LineBreak)
+		fmt.Fprintf(w, "# %s: %s (execution time: %s)", file, when.Format(timeFormat), d)
+		fmt.Fprintln(w)
 	}
 	for s.Scan() {
 		row := s.Text()
@@ -312,20 +287,20 @@ func prepareCommand(w io.Writer, file string, cid int, when time.Time, delta tim
 			elapsed += Five
 			when = when.Add(Five)
 		} else {
-			// stamp := w.Add(DIFF+Leap).Truncate(step)
-			stamp := when.Add(Leap).Truncate(Five)
-			io.WriteString(w, fmt.Sprintf("# SOY (GPS): %d/ GMT %3d/%s", stamp.Unix()-year.Unix(), stamp.YearDay(), stamp.Format("15:04:05")))
-			io.WriteString(w, LineBreak)
+			stamp := when//.Truncate(Five)
+			soy := (stamp.Unix()-year.Unix()) + int64(Leap.Seconds())
+			fmt.Fprintf(w, "# SOY (GPS): %d/ GMT %03d/%s", soy, stamp.YearDay(), stamp.Format("15:04:05"))
+			fmt.Fprintln(w)
 		}
 		if keep && strings.HasPrefix(row, "#") {
 			row = fmt.Sprintf("# CMD %d: %s", cid, strings.TrimPrefix(row, "#"))
 			cid++
 		}
 		if keep || !strings.HasPrefix(row, "#") {
-			io.WriteString(w, row)
-			io.WriteString(w, LineBreak)
+			fmt.Fprintln(w, row)
 		}
 	}
+	fmt.Fprintln(w)
 	return cid, elapsed, s.Err()
 }
 
