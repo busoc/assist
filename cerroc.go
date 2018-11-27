@@ -119,6 +119,37 @@ Eclipse, are: 1, on, true
 the values accepted by assist to decide if the trajectory is "leaving" SAA/
 Eclipse are: 0, off, false
 
+Configuration sections/options:
+
+assist accepts via the "config" flag a configuration file as first argument
+instead of a file with a predicted trajectory. The format of the configuration
+file is toml.
+
+There are three main sections in the configuration files (options for each section
+are described below - check also the Options section of this help for additional
+information):
+
+* default : configuring the input and output of assist
+  - alliop       = file where schedule file will be created
+  - instrlist    = file where instrlist file will be created
+  - path         = file with the input trajectory to use to create the schedule
+	- resolution   = time interval between two rows in the trajectory file
+  - keep-comment = schedule contains the comment present in the command files
+
+* delta   : configuring the various time used to schedule the ROC and CER commands
+  - wait     = wait time after entering eclipse for ROCON to be scheduled
+  - azm      = duration of the AZM
+  - rocon    = expected time of the ROCON
+  - rocoff   = expected time of the ROCOFF
+  - cer      = time before entering eclipse to activate CER(ON|OFF)
+  - crossing = minimum time of SAA and Eclipse
+
+* commands: configuring the location of the files that contain the commands
+  - rocon  = file with commands for ROCON in text format
+  - rocoff = file with commands for ROCOFF in text format
+  - ceron  = file with commands for CERON in text format
+  - ceroff = file with commands for CEROFF in text format
+
 Options:
 
   -rocon-time     TIME  ROCON expected execution time
