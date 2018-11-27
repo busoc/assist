@@ -1,0 +1,38 @@
+#expected execution time of the AZM
+alliop       = "tmp/alliop.txt"
+instrlist    = "tmp/instrlist.txt"
+keep-comment = true
+
+path = "tmp/cerroc/trajectory.csv"
+resolution = "10s"
+
+[delta]
+wait     = "90s"
+rocon    = "10s"
+rocoff   = "80s"
+cer      = "900s"
+crossing = "120s"
+
+[commands]
+rocon  = "tmp/cerroc/MXGS_ROCON.txt"
+rocoff = "tmp/cerroc/MXGS_ROCOFF.txt"
+ceron  = "tmp/cerroc/MMIA_CERON.txt"
+ceroff = "tmp/cerroc/MMIA_CEROFF.txt"
+
+# [rocon]
+# file  = "tmp/cerroc/MXGS_ROCON.txt"
+# time  = "10s"
+# wait = "90s"
+#
+# [rocoff]
+# file  = "tmp/cerroc/MXGS_ROCOFF.txt"
+# time = "80s"
+#
+# [ceron]
+# file     = "tmp/cerroc/MMIA_CERON.txt"
+# time     = "900s"
+# crossing = "120s"
+#
+# [ceroff]
+# file      = "tmp/cerroc/MMIA_CEROFF.txt"
+# time     = "900s"
