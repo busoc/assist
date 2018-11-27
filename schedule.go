@@ -85,14 +85,14 @@ func (s *Schedule) Schedule(d delta, roc, cer bool) ([]*Entry, error) {
 	}
 	var es []*Entry
 	if roc {
-		if vs, err := s.scheduleMXGS(d.Rocon, d.Rocoff, d.Wait, d.AZM); err != nil {
+		if vs, err := s.scheduleMXGS(d.Rocon.Duration, d.Rocoff.Duration, d.Wait.Duration, d.AZM.Duration); err != nil {
 			return nil, err
 		} else {
 			es = append(es, vs...)
 		}
 	}
 	if cer {
-		if vs, err := s.scheduleMMIA(d.Cer, d.Intersect); err != nil {
+		if vs, err := s.scheduleMMIA(d.Cer.Duration, d.Intersect.Duration); err != nil {
 			return nil, err
 		} else {
 			es = append(es, vs...)
