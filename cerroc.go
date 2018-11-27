@@ -57,11 +57,11 @@ type delta struct {
 }
 
 type fileset struct {
-	Rocon       string `toml:"rocon"`
-	Rocoff      string `toml:"rocoff"`
-	Ceron       string `toml:"ceron"`
-	Ceroff      string `toml:"ceroff"`
-	Keep        bool   `toml:"-"`
+	Rocon  string `toml:"rocon"`
+	Rocoff string `toml:"rocoff"`
+	Ceron  string `toml:"ceron"`
+	Ceroff string `toml:"ceroff"`
+	Keep   bool   `toml:"-"`
 
 	Alliop    string `toml:"-"`
 	Instrlist string `toml:"-"`
@@ -186,12 +186,12 @@ func init() {
 
 func main() {
 	var fs fileset
-	d := delta {
-		Rocon: Duration{time.Second*50},
-		Rocoff: Duration{time.Second*80},
-		Cer: Duration{time.Second*300},
+	d := delta{
+		Rocon:     Duration{time.Second * 50},
+		Rocoff:    Duration{time.Second * 80},
+		Cer:       Duration{time.Second * 300},
 		Intersect: Duration{DefaultIntersectTime},
-		AZM: Duration{time.Second*40},
+		AZM:       Duration{time.Second * 40},
 	}
 	flag.Var(&d.Rocon, "rocon-time", "ROCON execution time")
 	flag.Var(&d.Rocoff, "rocoff-time", "ROCOFF execution time")
@@ -312,18 +312,18 @@ func loadFromConfig(file string, d *delta, fs *fileset) (*Schedule, error) {
 	}
 	defer r.Close()
 
-	c := struct{
+	c := struct {
 		Resolution Duration `toml:"resolution"`
-		Trajectory string `toml:"path"`
+		Trajectory string   `toml:"path"`
 
-		Alliop string `toml:"alliop"`
-		Instr  string `toml:"instrlist"`
-		Comment bool `toml:"keep-comment"`
+		Alliop  string `toml:"alliop"`
+		Instr   string `toml:"instrlist"`
+		Comment bool   `toml:"keep-comment"`
 
-		Delta *delta `toml:"delta"`
+		Delta    *delta   `toml:"delta"`
 		Commands *fileset `toml:"commands"`
 	}{
-		Delta: d,
+		Delta:    d,
 		Commands: fs,
 	}
 	if err := toml.NewDecoder(r).Decode(&c); err != nil {
