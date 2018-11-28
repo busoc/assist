@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	// "path/filepath"
 	"strings"
 	"time"
 
@@ -20,8 +19,8 @@ import (
 const timeFormat = "2006-01-02T15:04:05.000000"
 
 const (
-	Version   = "0.1.0-beta"
-	BuildTime = "2018-11-26 06:35:00"
+	Version   = "1.0.0"
+	BuildTime = "2018-11-28 13:55:00"
 	Program   = "assist"
 )
 
@@ -209,7 +208,6 @@ func init() {
 	DefaultBaseTime = ExecutionTime.Add(Day).Truncate(Day).Add(time.Hour * 10)
 
 	log.SetOutput(os.Stderr)
-	// log.SetFlags(0)
 	log.SetPrefix(fmt.Sprintf("[%s-%s] ", Program, Version))
 
 	flag.Usage = func() {
@@ -291,7 +289,6 @@ func main() {
 		log.Fatalln("no command files provided")
 	}
 	log.Printf("%s-%s (build: %s)", Program, Version, BuildTime)
-	log.Printf("execution time: %s", ExecutionTime)
 	log.Printf("settings: AZM duration: %s", d.AZM.Duration)
 	log.Printf("settings: ROCON time: %s", d.Rocon.Duration)
 	log.Printf("settings: ROCOFF time: %s", d.Rocoff.Duration)
