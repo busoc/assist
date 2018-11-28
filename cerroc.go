@@ -169,6 +169,8 @@ Options:
   -keep-comment         keep comment (if any) from command files
   -list                 print the list of commands instead of creating a schedule
   -config               load settings from a configuration file
+  -version              print assist version and exit
+  -help                 print this message and exit
 
 Examples:
 
@@ -207,7 +209,8 @@ func init() {
 	DefaultBaseTime = ExecutionTime.Add(Day).Truncate(Day).Add(time.Hour * 10)
 
 	log.SetOutput(os.Stderr)
-	log.SetFlags(0)
+	// log.SetFlags(0)
+	log.SetPrefix(fmt.Sprintf("[%s-%s] ", Program, Version))
 
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, helpText)
@@ -241,7 +244,13 @@ func main() {
 	resolution := flag.Duration("resolution", time.Second*10, "prediction accuracy")
 	config := flag.Bool("config", false, "use configuration file")
 	list := flag.Bool("list", false, "schedule list")
+	version := flag.Bool("version", false, "print version and exists")
 	flag.Parse()
+
+	if *version {
+		fmt.Fprintf(os.Stderr, "%s-%s (%s)\n", Program, Version, BuildTime)
+		os.Exit(2)
+	}
 
 	b, err := time.Parse(time.RFC3339, *baseTime)
 	if err != nil && *baseTime != "" {
@@ -281,24 +290,39 @@ func main() {
 	if fs.Empty() {
 		log.Fatalln("no command files provided")
 	}
-	var w io.Writer = os.Stdout
+	log.Printf("%s-%s (build: %s)", Program, Version, BuildTime)
+	log.Printf("execution time: %s", ExecutionTime)
+	log.Printf("settings: AZM duration: %s", d.AZM.Duration)
+	log.Printf("settings: ROCON time: %s", d.Rocon.Duration)
+	log.Printf("settings: ROCOFF time: %s", d.Rocoff.Duration)
+	log.Printf("settings: CER time: %s", d.Cer.Duration)
+	log.Printf("settings: CER crossing duration: %s", d.Intersect.Duration)
+
+	var w io.Writer
+	digest := md5.New()
 	switch f, err := os.Create(fs.Alliop); {
 	case err == nil:
-		w = f
+		w = io.MultiWriter(f, digest)
 		defer f.Close()
 	case err != nil && fs.Alliop == "":
+		fs.Alliop = "alliop"
+		w = io.MultiWriter(digest, os.Stdout)
 	default:
 		log.Fatalln(err)
 	}
 	switch f, err := os.Create(fs.Instrlist); {
 	case err == nil:
+		digest := md5.New()
+		w := io.MultiWriter(f, digest)
 		defer f.Close()
+
 		if fs.CanROC() {
-			fmt.Fprintln(f, InstrMXGS)
+			fmt.Fprintln(w, InstrMXGS)
 		}
 		if fs.CanCER() {
-			fmt.Fprintln(f, InstrMMIA)
+			fmt.Fprintln(w, InstrMMIA)
 		}
+		log.Printf("md5 %s: %x", fs.Instrlist, digest.Sum(nil))
 	case err != nil && fs.Instrlist == "":
 	default:
 		log.Fatalln(err)
@@ -310,14 +334,22 @@ func main() {
 	if len(es) == 0 {
 		return
 	}
+	first, last := es[0], es[len(es)-1]
+	log.Printf("first command (%s) at %s", first.Label, first.When.Format(timeFormat))
+	log.Printf("last command (%s) at %s", last.Label, last.When.Format(timeFormat))
 	b = es[0].When.Add(-Five)
 	writePreamble(w, b)
 	if err := writeMetadata(w, flag.Arg(0), fs); err != nil {
 		log.Fatalln(err)
 	}
-	if err := writeSchedule(w, es, b, fs); err != nil {
+	ms, err := writeSchedule(w, es, b, fs)
+	if err != nil {
 		log.Fatalln(err)
 	}
+	for n, c := range ms {
+		log.Printf("%s scheduled: %d", n, c)
+	}
+	log.Printf("md5 %s: %x", fs.Alliop, digest.Sum(nil))
 }
 
 type Duration struct {
@@ -364,9 +396,11 @@ func loadFromConfig(file string, d *delta, fs *fileset) (*Schedule, error) {
 	return Open(c.Trajectory, c.Resolution.Duration)
 }
 
-func writeSchedule(w io.Writer, es []*Entry, when time.Time, fs fileset) error {
+func writeSchedule(w io.Writer, es []*Entry, when time.Time, fs fileset) (map[string]int, error) {
 	cid := 1
 	var err error
+
+	ms := make(map[string]int)
 	for _, e := range es {
 		if e.When.Before(when) {
 			continue
@@ -375,30 +409,34 @@ func writeSchedule(w io.Writer, es []*Entry, when time.Time, fs fileset) error {
 		switch e.Label {
 		case ROCON:
 			if !fs.CanROC() {
-				return missingFile("ROC")
+				return nil, missingFile("ROC")
 			}
 			cid, delta, err = prepareCommand(w, fs.Rocon, cid, e.When, delta, fs.Keep)
+			ms[e.Label]++
 		case ROCOFF:
 			if !fs.CanROC() {
-				return missingFile("ROC")
+				return nil, missingFile("ROC")
 			}
 			cid, delta, err = prepareCommand(w, fs.Rocoff, cid, e.When, delta, fs.Keep)
+			ms[e.Label]++
 		case CERON:
 			if !fs.CanCER() {
-				return missingFile("CER")
+				return nil, missingFile("CER")
 			}
+			ms[e.Label]++
 			cid, delta, err = prepareCommand(w, fs.Ceron, cid, e.When, delta, fs.Keep)
 		case CEROFF:
 			if !fs.CanCER() {
-				return missingFile("CER")
+				return nil, missingFile("CER")
 			}
+			ms[e.Label]++
 			cid, delta, err = prepareCommand(w, fs.Ceroff, cid, e.When, delta, fs.Keep)
 		}
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return ms, nil
 }
 
 func writePreamble(w io.Writer, when time.Time) {
@@ -434,7 +472,8 @@ func writeMetadata(w io.Writer, rs string, fs fileset) error {
 			return err
 		}
 		mod := s.ModTime().Format("2006-01-02 15:04:05")
-		fmt.Fprintf(w, "# %s: md5 = %x, lastmod: %s, size (bytes): %d", f, digest.Sum(nil), mod, s.Size())
+		log.Printf("%s: md5 = %x, lastmod: %s, size: %d bytes", f, digest.Sum(nil), mod, s.Size())
+		fmt.Fprintf(w, "# %s: md5 = %x, lastmod: %s, size : %d bytes", f, digest.Sum(nil), mod, s.Size())
 		fmt.Fprintln(w)
 		digest.Reset()
 	}
