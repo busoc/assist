@@ -182,7 +182,8 @@ $ assist -keep-comment -base-time 2018-11-19T12:35:00Z \
   -ceroff-file /usr/local/etc/asim/MMIA-CEROFF.txt \
   -azm 80s \
   -cer-time 900s \
-  -datadir /var/asim/2018-310/ \
+  -alliop /var/asim/2018-310/alliop.txt \
+  -instrlist /var/asim/2018-310/instrlist.txt \
   inspect-trajectory.csv
 
 # create a schedule only for CER (the same can be done for ROC).
@@ -190,7 +191,7 @@ $ assist -keep-comment -base-time 2018-11-19T12:35:00Z \
   -ceron-file /usr/local/etc/asim/MMIA-CERON.txt \
   -ceroff-file /usr/local/etc/asim/MMIA-CEROFF.txt \
   -cer-time 900s \
-  -datadir /var/asim/CER-2018-310/ \
+  -alliop /var/asim/CER-2018-310/alliop.txt \
   inspect-trajectory.csv
 
 # print the list of commands that could be scheduled from a local file
