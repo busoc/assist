@@ -49,6 +49,7 @@ var (
 type delta struct {
 	Rocon     Duration `toml:"rocon"`
 	Rocoff    Duration `toml:"rocoff"`
+	Margin    Duration `toml:"margin"`
 	Cer       Duration `toml:"cer"`
 	Wait      Duration `toml:"wait"`
 	Intersect Duration `toml:"crossing"`
@@ -140,6 +141,7 @@ information):
   - azm      = duration of the AZM
   - rocon    = expected time of the ROCON
   - rocoff   = expected time of the ROCOFF
+  - margin   = minium interval of time between ROCON end and ROCOFF start
   - cer      = time before entering eclipse to activate CER(ON|OFF)
   - crossing = minimum time of SAA and Eclipse
 
@@ -154,6 +156,7 @@ Options:
   -rocon-time     TIME  ROCON expected execution time
   -rocoff-time    TIME  ROCOFF expected execution time
   -rocon-wait     TIME  wait TIME after entering Eclipse before starting ROCON
+  -roc-margin     TIME  margin time between ROCON end and ROCOFF start
   -cer-time       TIME  TIME before Eclipse to switch CER(ON|OFF)
   -cer-crossing   TIME  minimum crossing time of SAA and Eclipse to switch CER(ON|OFF)
   -azm            TIME  AZM duration
@@ -222,6 +225,7 @@ func main() {
 	d := delta{
 		Rocon:     Duration{time.Second * 50},
 		Rocoff:    Duration{time.Second * 80},
+		Margin:    Duration{time.Second * 120},
 		Cer:       Duration{time.Second * 300},
 		Intersect: Duration{DefaultIntersectTime},
 		AZM:       Duration{time.Second * 40},
@@ -232,6 +236,7 @@ func main() {
 	flag.Var(&d.Cer, "cer-time", "delta CER margin time")
 	flag.Var(&d.Intersect, "cer-crossing", "intersection time to enable CER")
 	flag.Var(&d.AZM, "azm", "default AZM duration")
+	flag.Var(&d.Margin, "roc-margin", "ROC margin")
 	flag.StringVar(&fs.Rocon, "rocon-file", "", "mxgs rocon command file")
 	flag.StringVar(&fs.Rocoff, "rocoff-file", "", "mxgs rocoff command file")
 	flag.StringVar(&fs.Ceron, "ceron-file", "", "mmia ceron command file")
@@ -280,9 +285,21 @@ func main() {
 		if err != nil {
 			log.Fatalln(err)
 		}
-		log.SetOutput(os.Stdout)
+		first, last := es[0], es[len(es)-1]
+		fmt.Printf("%3d | %-8s | %9d | %s | %s", 0, "SCHEDULE", SOY(first.When.Add(-Five)), first.When.Format("2006-01-02T15:04:05"), last.When.Format("2006-01-02T15:04:05"))
+		fmt.Println()
 		for i, e := range es {
-			log.Printf("%3d | %-7s | %s | %d", i+1, e.Label, e.When.Format("2006-01-02T15:04:05"), e.SOY())
+			var to time.Time
+			switch e.Label {
+			case ROCON:
+				to = e.When.Add(d.Rocon.Duration)
+			case ROCOFF:
+				to = e.When.Add(d.Rocoff.Duration)
+			case CERON, CEROFF:
+				to = e.When.Add(d.Cer.Duration)
+			}
+			fmt.Printf("%3d | %-8s | %9d | %s | %s", i+1, e.Label, e.SOY(), e.When.Format("2006-01-02T15:04:05"), to.Format("2006-01-02T15:04:05"))
+			fmt.Println()
 		}
 		return
 	}
@@ -333,8 +350,8 @@ func main() {
 		return
 	}
 	first, last := es[0], es[len(es)-1]
-	log.Printf("first command (%s) at %s", first.Label, first.When.Format(timeFormat))
-	log.Printf("last command (%s) at %s", last.Label, last.When.Format(timeFormat))
+	log.Printf("first command (%s) at %s (%d)", first.Label, first.When.Format(timeFormat), SOY(first.When))
+	log.Printf("last command (%s) at %s (%d)", last.Label, last.When.Format(timeFormat), SOY(last.When))
 	b = es[0].When.Add(-Five)
 	writePreamble(w, b)
 	if err := writeMetadata(w, flag.Arg(0), fs); err != nil {

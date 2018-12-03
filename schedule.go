@@ -32,10 +32,14 @@ type Entry struct {
 	Label string
 }
 
-func (e Entry) SOY() int64 {
-	year := e.When.AddDate(0, 0, -e.When.YearDay()+1).Truncate(Day).Add(Leap)
-	stamp := e.When.Add(Leap)
+func SOY(t time.Time) int64 {
+	year := t.AddDate(0, 0, -t.YearDay()+1).Truncate(Day).Add(Leap)
+	stamp := t.Add(Leap)
 	return stamp.Unix() - year.Unix()
+}
+
+func (e Entry) SOY() int64 {
+	return SOY(e.When)
 }
 
 type Schedule struct {
@@ -85,7 +89,7 @@ func (s *Schedule) Schedule(d delta, roc, cer bool) ([]*Entry, error) {
 	}
 	var es []*Entry
 	if roc {
-		if vs, err := s.scheduleMXGS(d.Rocon.Duration, d.Rocoff.Duration, d.Wait.Duration, d.AZM.Duration); err != nil {
+		if vs, err := s.scheduleMXGS(d.Rocon.Duration, d.Rocoff.Duration, d.Wait.Duration, d.AZM.Duration, d.Margin.Duration); err != nil {
 			return nil, err
 		} else {
 			es = append(es, vs...)
@@ -102,11 +106,11 @@ func (s *Schedule) Schedule(d delta, roc, cer bool) ([]*Entry, error) {
 	return es, nil
 }
 
-func (s *Schedule) scheduleMXGS(on, off, wait, azm time.Duration) ([]*Entry, error) {
+func (s *Schedule) scheduleMXGS(on, off, wait, azm, margin time.Duration) ([]*Entry, error) {
 	predicate := func(e, a *Period) bool { return e.Overlaps(a) }
 	var es []*Entry
 	for _, e := range s.Eclipses {
-		if e.Duration() <= on+off+wait {
+		if e.Duration() <= on+off+margin+wait {
 			continue
 		}
 		as := isCrossingList(e, s.Saas, predicate)
@@ -121,6 +125,9 @@ func (s *Schedule) scheduleMXGS(on, off, wait, azm time.Duration) ([]*Entry, err
 		rocon := scheduleROCON(e, s1, on, wait, azm)
 		rocoff := scheduleROCOFF(e, s2, off, azm)
 
+		if rocoff.When.Sub(rocon.When.Add(on)) <= margin {
+			continue
+		}
 		if rocoff.When.Before(rocon.When) || rocoff.When.Sub(rocon.When) <= on {
 			continue
 		}
@@ -227,7 +234,8 @@ func scheduleROCOFF(e, s *Period, off, azm time.Duration) *Entry {
 		return y
 	}
 	if z := s.Ends.Add(azm); z.After(start) && s.Ends.Before(end) {
-		y.When = s.Starts.Add(-off)
+		y.When = s.Ends.Add(-off)
+		// y.When = s.Starts.Add(-off)
 		return y
 	}
 	return y
