@@ -54,6 +54,7 @@ type delta struct {
 	Wait      Duration `toml:"wait"`
 	Intersect Duration `toml:"crossing"`
 	AZM       Duration `toml:"azm"`
+	Saa       Duration `toml:"saa"`
 }
 
 type fileset struct {
@@ -143,7 +144,8 @@ information):
   - rocoff   = expected time of the ROCOFF
   - margin   = minium interval of time between ROCON end and ROCOFF start
   - cer      = time before entering eclipse to activate CER(ON|OFF)
-  - crossing = minimum time of SAA and Eclipse
+  - crossing = mininum time of SAA and Eclipse
+  - saa      = mininum SAA duration to have an AZM scheduled
 
 * commands: configuring the location of the files that contain the commands
   - rocon  = file with commands for ROCON in text format
@@ -160,6 +162,7 @@ Options:
   -cer-time       TIME  TIME before Eclipse to switch CER(ON|OFF)
   -cer-crossing   TIME  minimum crossing time of SAA and Eclipse to switch CER(ON|OFF)
   -azm            TIME  AZM duration
+  -saa            TIME  SAA duration
   -rocon-file     FILE  use FILE with commands for ROCON
   -rocoff-file    FILE  use FILE with commands for ROCOFF
   -ceron-file     FILE  use FILE with commands for CERON
@@ -229,6 +232,7 @@ func main() {
 		Cer:       Duration{time.Second * 300},
 		Intersect: Duration{DefaultIntersectTime},
 		AZM:       Duration{time.Second * 40},
+		Saa:       Duration{time.Second * 10},
 	}
 	flag.Var(&d.Rocon, "rocon-time", "ROCON execution time")
 	flag.Var(&d.Rocoff, "rocoff-time", "ROCOFF execution time")
@@ -237,6 +241,7 @@ func main() {
 	flag.Var(&d.Intersect, "cer-crossing", "intersection time to enable CER")
 	flag.Var(&d.AZM, "azm", "default AZM duration")
 	flag.Var(&d.Margin, "roc-margin", "ROC margin")
+	flag.Var(&d.Saa, "saa", "default SAA duration")
 	flag.StringVar(&fs.Rocon, "rocon-file", "", "mxgs rocon command file")
 	flag.StringVar(&fs.Rocoff, "rocoff-file", "", "mxgs rocoff command file")
 	flag.StringVar(&fs.Ceron, "ceron-file", "", "mmia ceron command file")
@@ -269,16 +274,16 @@ func main() {
 	} else {
 		switch flag.NArg() {
 		default:
-			s, err = Open(flag.Arg(0), *resolution)
+			s, err = Open(flag.Arg(0), *resolution, d.Saa.Duration)
 		case 0:
-			s, err = OpenReader(os.Stdin, *resolution)
+			s, err = OpenReader(os.Stdin, *resolution, d.Saa.Duration)
 		}
 	}
 	if err != nil {
 		log.Fatalln(err)
 	}
 	if *list {
-		if !b.Equal(DefaultBaseTime) {
+		if !b.IsZero() {
 			s = s.Filter(b)
 		}
 		es, err := s.Schedule(d, true, true)
@@ -408,7 +413,7 @@ func loadFromConfig(file string, d *delta, fs *fileset) (*Schedule, error) {
 		return nil, err
 	}
 	fs.Alliop, fs.Instrlist, fs.Keep = c.Alliop, c.Instr, c.Comment
-	return Open(c.Trajectory, c.Resolution.Duration)
+	return Open(c.Trajectory, c.Resolution.Duration, d.Saa.Duration)
 }
 
 func writeSchedule(w io.Writer, es []*Entry, when time.Time, fs fileset) (map[string]int, error) {
