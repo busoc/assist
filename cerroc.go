@@ -291,7 +291,7 @@ func main() {
 			log.Fatalln(err)
 		}
 		first, last := es[0], es[len(es)-1]
-		fmt.Printf("%3d | %-8s | %9d | %s | %s", 0, "SCHEDULE", SOY(first.When.Add(-Five)), first.When.Format("2006-01-02T15:04:05"), last.When.Format("2006-01-02T15:04:05"))
+		fmt.Printf("%3d | %-8s | %9d | %s | %s", 0, "SCHEDULE", SOY(first.When.Add(-Five)), first.When.Add(-Five).Format("2006-01-02T15:04:05"), last.When.Format("2006-01-02T15:04:05"))
 		fmt.Println()
 		for i, e := range es {
 			var to time.Time
