@@ -172,7 +172,9 @@ Options:
   -alliop         FILE  save schedule to FILE
   -instrlist      FILE  save instrlist to FILE
   -keep-comment         keep comment (if any) from command files
+  -list-periods         print the list of eclipses and crossing periods
   -list                 print the list of commands instead of creating a schedule
+  -ignore               keep schedule entries from block that does not meet constraints
   -config               load settings from a configuration file
   -version              print assist version and exit
   -help                 print this message and exit
@@ -252,6 +254,7 @@ func main() {
 	baseTime := flag.String("base-time", DefaultBaseTime.Format("2006-01-02T15:04:05Z"), "schedule start time")
 	resolution := flag.Duration("resolution", time.Second*10, "prediction accuracy")
 	config := flag.Bool("config", false, "use configuration file")
+	ignore := flag.Bool("ignore", false, "ignore hazarduous blocks")
 	elist := flag.Bool("list", false, "schedule list")
 	plist := flag.Bool("list-periods", false, "periods list")
 	version := flag.Bool("version", false, "print version and exists")
@@ -292,6 +295,7 @@ func main() {
 		return
 	}
 	if *elist {
+		s.Ignore = *ignore
 		es, err := s.Filter(b).Schedule(d, true, true)
 		if err != nil {
 			log.Fatalln(err)
@@ -300,7 +304,7 @@ func main() {
 			return
 		}
 		first, last := es[0], es[len(es)-1]
-		fmt.Printf("%3d | %-8s | %9d | %s | %s", 0, "SCHEDULE", SOY(first.When.Add(-Five)), first.When.Add(-Five).Format("2006-01-02T15:04:05"), last.When.Format("2006-01-02T15:04:05"))
+		fmt.Printf("%3d | %-9s | %9d | %s | %s", 0, "SCHEDULE", SOY(first.When.Add(-Five)), first.When.Add(-Five).Format("2006-01-02T15:04:05"), last.When.Format("2006-01-02T15:04:05"))
 		fmt.Println()
 		for i, e := range es {
 			var to time.Time
@@ -312,7 +316,11 @@ func main() {
 			case CERON, CEROFF:
 				to = e.When.Add(d.Cer.Duration)
 			}
-			fmt.Printf("%3d | %-8s | %9d | %s | %s", i+1, e.Label, e.SOY(), e.When.Format("2006-01-02T15:04:05"), to.Format("2006-01-02T15:04:05"))
+			label := e.Label
+			if e.Warning {
+				label = fmt.Sprintf("!%s", label)
+			}
+			fmt.Printf("%3d | %-9s | %9d | %s | %s", i+1, label, e.SOY(), e.When.Format("2006-01-02T15:04:05"), to.Format("2006-01-02T15:04:05"))
 			fmt.Println()
 		}
 		return

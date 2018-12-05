@@ -7,7 +7,6 @@ import (
 	"os"
 	"sort"
 	"time"
-	"log"
 )
 
 const (
@@ -29,8 +28,9 @@ const (
 )
 
 type Entry struct {
-	When  time.Time
-	Label string
+	Label   string
+	When    time.Time
+	Warning bool
 }
 
 func SOY(t time.Time) int64 {
@@ -44,6 +44,7 @@ func (e Entry) SOY() int64 {
 }
 
 type Schedule struct {
+	Ignore   bool
 	Eclipses []*Period
 	Saas     []*Period
 }
@@ -84,7 +85,7 @@ func (s *Schedule) Filter(t time.Time) *Schedule {
 			as = append(as, a)
 		}
 	}
-	return &Schedule{es, as}
+	return &Schedule{Ignore: s.Ignore, Eclipses: es, Saas: as}
 }
 
 func (s *Schedule) Periods() []*Period {
@@ -129,7 +130,6 @@ func (s *Schedule) scheduleMXGS(on, off, wait, azm, margin, saa time.Duration) (
 	saas := make([]*Period, 0, len(s.Saas))
 	for _, s := range s.Saas {
 		if saa > 0 && s.Duration() < saa {
-			log.Println("skip due to saa duration", s.Duration(), saa)
 			continue
 		}
 		saas = append(saas, s)
@@ -152,12 +152,16 @@ func (s *Schedule) scheduleMXGS(on, off, wait, azm, margin, saa time.Duration) (
 		rocoff := scheduleROCOFF(e, s2, off, azm)
 
 		if margin > 0 && rocoff.When.Sub(rocon.When.Add(on)) <= margin {
-			log.Println("skip ROC: margin", rocon.When.Format("15:04:05"), rocoff.When.Format("15:04:05"))
-			continue
+			if !s.Ignore {
+				continue
+			}
+			rocon.Warning, rocoff.Warning = true, true
 		}
 		if rocoff.When.Before(rocon.When) || rocoff.When.Sub(rocon.When) <= on {
-			log.Println("skip ROC: overlap", rocon.When.Format("15:04:05"), rocoff.When.Format("15:04:05"))
-			continue
+			if !s.Ignore {
+				continue
+			}
+			rocon.Warning, rocoff.Warning = true, true
 		}
 		es = append(es, rocon, rocoff)
 	}
@@ -190,7 +194,7 @@ func (s *Schedule) scheduleMMIA(delta, intersect time.Duration) ([]*Entry, error
 }
 
 type Period struct {
-	Label string
+	Label        string
 	Starts, Ends time.Time
 }
 
@@ -230,48 +234,36 @@ func (p Period) Intersect(o *Period) time.Duration {
 }
 
 func scheduleROCON(e, s *Period, on, wait, azm time.Duration) *Entry {
-	start := e.Starts.Add(wait)
-	end := start.Add(on)
-
-	y := &Entry{Label: ROCON, When: start}
+	y := &Entry{Label: ROCON, When: e.Starts.Add(wait)}
 	if s == nil {
 		return y
 	}
-	if z := s.Starts.Add(azm); z.After(start) && s.Starts.Before(end) {
-		y.When = z
-		if s.Ends.Sub(y.When) < on {
-			y.When = s.Ends.Add(azm)
-		}
-		return y
+
+	if isBetween(s.Starts, s.Starts.Add(azm), y.When) || isBetween(s.Starts, s.Starts.Add(azm), y.When.Add(on)) {
+		y.When = s.Starts.Add(azm)
 	}
-	if z := s.Ends.Add(azm); z.After(start) && s.Ends.Before(end) {
-		y.When = z
+	if isBetween(s.Ends, s.Ends.Add(azm), y.When) || isBetween(s.Ends, s.Ends.Add(azm), y.When.Add(on-time.Second)) {
+		y.When = s.Ends.Add(azm)
 	}
 	return y
 }
 
 func scheduleROCOFF(e, s *Period, off, azm time.Duration) *Entry {
-	start := e.Ends.Add(-off)
-	end := e.Ends
-
-	y := &Entry{Label: ROCOFF, When: start}
+	y := &Entry{Label: ROCOFF, When: e.Ends.Add(-off)}
 	if s == nil {
 		return y
 	}
-	if z := s.Starts.Add(azm); z.After(start) && s.Starts.Before(end) {
-		y.When = s.Starts.Add(-off)
-		return y
-	}
-	if z := s.Ends.Add(azm); z.After(start) && s.Ends.Before(end) {
+	if isBetween(s.Ends, s.Ends.Add(azm), y.When) || isBetween(s.Ends, s.Ends.Add(azm), y.When.Add(off)) {
 		y.When = s.Ends.Add(-off)
-		// y.When = s.Starts.Add(-off)
-		return y
+	}
+	if isBetween(s.Starts, s.Starts.Add(azm-time.Second), y.When) || isBetween(s.Starts, s.Starts.Add(azm), y.When.Add(off)) {
+		y.When = s.Starts.Add(-off)
 	}
 	return y
 }
 
 func isBetween(f, t, d time.Time) bool {
-	return f.Before(d) && t.After(d)
+	return f.Equal(d) || t.Equal(d) || f.Before(d) && t.After(d)
 }
 
 func listPeriods(r io.Reader, resolution time.Duration) ([]*Period, []*Period, error) {
@@ -306,9 +298,9 @@ func listPeriods(r io.Reader, resolution time.Duration) ([]*Period, []*Period, e
 				return nil, nil, timeBadSyntax(i, r[PredictTimeIndex])
 			}
 			es = append(es, &Period{
-				Label: "eclipse",
+				Label:  "eclipse",
 				Starts: e.Starts.UTC(),
-				Ends: e.Ends.Add(-resolution).UTC(),
+				Ends:   e.Ends.Add(-resolution).UTC(),
 			})
 			e = z
 		}
@@ -322,9 +314,9 @@ func listPeriods(r io.Reader, resolution time.Duration) ([]*Period, []*Period, e
 				return nil, nil, timeBadSyntax(i, r[PredictTimeIndex])
 			}
 			as = append(as, &Period{
-				Label: "saa",
+				Label:  "saa",
 				Starts: a.Starts.UTC(),
-				Ends: a.Ends.Add(-resolution).UTC(),
+				Ends:   a.Ends.Add(-resolution).UTC(),
 			})
 			a = z
 		}
