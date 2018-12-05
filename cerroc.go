@@ -252,7 +252,8 @@ func main() {
 	baseTime := flag.String("base-time", DefaultBaseTime.Format("2006-01-02T15:04:05Z"), "schedule start time")
 	resolution := flag.Duration("resolution", time.Second*10, "prediction accuracy")
 	config := flag.Bool("config", false, "use configuration file")
-	list := flag.Bool("list", false, "schedule list")
+	elist := flag.Bool("list", false, "schedule list")
+	plist := flag.Bool("list-periods", false, "periods list")
 	version := flag.Bool("version", false, "print version and exists")
 	flag.Parse()
 
@@ -274,21 +275,29 @@ func main() {
 	} else {
 		switch flag.NArg() {
 		default:
-			s, err = Open(flag.Arg(0), *resolution, d.Saa.Duration)
+			s, err = Open(flag.Arg(0), *resolution)
 		case 0:
-			s, err = OpenReader(os.Stdin, *resolution, d.Saa.Duration)
+			s, err = OpenReader(os.Stdin, *resolution)
 		}
 	}
 	if err != nil {
 		log.Fatalln(err)
 	}
-	if *list {
-		if !b.IsZero() {
-			s = s.Filter(b)
+	if *plist {
+		s = s.Filter(b)
+		for i, p := range s.Periods() {
+			fmt.Printf("%3d | %-8s | %s | %s | %s", i, p.Label, p.Starts.Format("2006-01-02T15:04:05"), p.Ends.Format("2006-01-02T15:04:05"), p.Duration())
+			fmt.Println()
 		}
-		es, err := s.Schedule(d, true, true)
+		return
+	}
+	if *elist {
+		es, err := s.Filter(b).Schedule(d, true, true)
 		if err != nil {
 			log.Fatalln(err)
+		}
+		if len(es) == 0 {
+			return
 		}
 		first, last := es[0], es[len(es)-1]
 		fmt.Printf("%3d | %-8s | %9d | %s | %s", 0, "SCHEDULE", SOY(first.When.Add(-Five)), first.When.Add(-Five).Format("2006-01-02T15:04:05"), last.When.Format("2006-01-02T15:04:05"))
@@ -413,7 +422,7 @@ func loadFromConfig(file string, d *delta, fs *fileset) (*Schedule, error) {
 		return nil, err
 	}
 	fs.Alliop, fs.Instrlist, fs.Keep = c.Alliop, c.Instr, c.Comment
-	return Open(c.Trajectory, c.Resolution.Duration, d.Saa.Duration)
+	return Open(c.Trajectory, c.Resolution.Duration)
 }
 
 func writeSchedule(w io.Writer, es []*Entry, when time.Time, fs fileset) (map[string]int, error) {
