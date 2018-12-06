@@ -288,7 +288,7 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	if *plist {
+	if *plist && !*ingest {
 		s = s.Filter(b)
 		for i, p := range s.Periods() {
 			fmt.Printf("%3d | %-8s | %s | %s | %s", i, p.Label, p.Starts.Format("2006-01-02T15:04:05"), p.Ends.Format("2006-01-02T15:04:05"), p.Duration())
@@ -296,7 +296,7 @@ func main() {
 		}
 		return
 	}
-	if *elist {
+	if *elist && !*ingest {
 		s.Ignore = *ignore
 		es, err := s.Filter(b).Schedule(d, true, true)
 		if err != nil {
