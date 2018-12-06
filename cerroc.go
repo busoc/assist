@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/md5"
+	"encoding/csv"
 	"flag"
 	"fmt"
 	"io"
@@ -257,6 +258,7 @@ func main() {
 	ignore := flag.Bool("ignore", false, "ignore hazarduous blocks")
 	elist := flag.Bool("list", false, "schedule list")
 	plist := flag.Bool("list-periods", false, "periods list")
+	ingest := flag.Bool("ingest", false, "")
 	version := flag.Bool("version", false, "print version and exists")
 	flag.Parse()
 
@@ -274,7 +276,7 @@ func main() {
 	}
 	var s *Schedule
 	if *config {
-		s, err = loadFromConfig(flag.Arg(0), &d, &fs)
+		s, err = loadFromConfig(flag.Arg(0), &d, &fs, *ingest)
 	} else {
 		switch flag.NArg() {
 		default:
@@ -304,7 +306,7 @@ func main() {
 			return
 		}
 		first, last := es[0], es[len(es)-1]
-		fmt.Printf("%3d | %-9s | %9d | %s | %s", 0, "SCHEDULE", SOY(first.When.Add(-Five)), first.When.Add(-Five).Format("2006-01-02T15:04:05"), last.When.Format("2006-01-02T15:04:05"))
+		fmt.Printf("%3d | %s | %-9s | %9d | %s | %s", 0, " ", "SCHEDULE", SOY(first.When.Add(-Five)), first.When.Add(-Five).Format("2006-01-02T15:04:05"), last.When.Format("2006-01-02T15:04:05"))
 		fmt.Println()
 		for i, e := range es {
 			var to time.Time
@@ -316,11 +318,12 @@ func main() {
 			case CERON, CEROFF:
 				to = e.When.Add(d.Cer.Duration)
 			}
-			label := e.Label
+			conflict := "-"
 			if e.Warning {
-				label = fmt.Sprintf("!%s", label)
+				conflict = "!"
 			}
-			fmt.Printf("%3d | %-9s | %9d | %s | %s", i+1, label, e.SOY(), e.When.Format("2006-01-02T15:04:05"), to.Format("2006-01-02T15:04:05"))
+
+			fmt.Printf("%3d | %s | %-9s | %9d | %s | %s", i+1, conflict, e.Label, e.SOY(), e.When.Format("2006-01-02T15:04:05"), to.Format("2006-01-02T15:04:05"))
 			fmt.Println()
 		}
 		return
@@ -364,7 +367,20 @@ func main() {
 	default:
 		log.Fatalln(err)
 	}
-	es, err := s.Filter(b).Schedule(d, fs.CanROC(), fs.CanCER())
+	var es []*Entry
+	if *ingest {
+		fs := flag.Args()
+		if len(fs) <= 1 {
+			log.Fatalln("no files to ingest")
+		}
+		if *config {
+			fs = fs[1:]
+		}
+		es, err = ingestFiles(fs, b)
+	} else {
+		es, err = s.Filter(b).Schedule(d, fs.CanROC(), fs.CanCER())
+	}
+	log.Println(es, err)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -389,6 +405,57 @@ func main() {
 	log.Printf("md5 %s: %x", fs.Alliop, digest.Sum(nil))
 }
 
+func ingestFiles(files []string, b time.Time) ([]*Entry, error) {
+	ingest := func(file string) ([]*Entry, error) {
+		r, err := os.Open(file)
+		if err != nil {
+			return nil, err
+		}
+		defer r.Close()
+
+		rs := csv.NewReader(r)
+		rs.Comment = PredictComment
+		rs.Comma = '|'
+		rs.FieldsPerRecord = 6
+		rs.TrimLeadingSpace = true
+
+		var es []*Entry
+		for {
+			rs, err := rs.Read()
+			if rs == nil && err == io.EOF {
+				break
+			}
+			if err != nil {
+				return nil, err
+			}
+			switch n := strings.TrimSpace(rs[2]); n {
+			case ROCON, ROCOFF, CERON, CEROFF:
+				e := Entry{Label: n}
+				if e.When, err = time.Parse("2006-01-02T15:04:05", strings.TrimSpace(rs[4])); err != nil {
+					return nil, err
+				}
+				if !b.IsZero() && e.When.Before(b) {
+					continue
+				}
+				es = append(es, &e)
+			case "SCHEDULE":
+			default:
+				return nil, fmt.Errorf("invalid command name: %s", n)
+			}
+		}
+		return es, nil
+	}
+	var es []*Entry
+	for _, f := range files {
+		vs, err := ingest(f)
+		if err != nil {
+			return nil, err
+		}
+		es = append(es, vs...)
+	}
+	return es, nil
+}
+
 type Duration struct {
 	time.Duration
 }
@@ -405,7 +472,7 @@ func (d *Duration) Set(s string) error {
 	return err
 }
 
-func loadFromConfig(file string, d *delta, fs *fileset) (*Schedule, error) {
+func loadFromConfig(file string, d *delta, fs *fileset, ingest bool) (*Schedule, error) {
 	r, err := os.Open(file)
 	if err != nil {
 		return nil, err
@@ -430,6 +497,9 @@ func loadFromConfig(file string, d *delta, fs *fileset) (*Schedule, error) {
 		return nil, err
 	}
 	fs.Alliop, fs.Instrlist, fs.Keep = c.Alliop, c.Instr, c.Comment
+	if ingest {
+		return nil, nil
+	}
 	return Open(c.Trajectory, c.Resolution.Duration)
 }
 
