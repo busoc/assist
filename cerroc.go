@@ -380,7 +380,6 @@ func main() {
 	} else {
 		es, err = s.Filter(b).Schedule(d, fs.CanROC(), fs.CanCER())
 	}
-	log.Println(es, err)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -500,7 +499,10 @@ func loadFromConfig(file string, d *delta, fs *fileset, ingest bool) (*Schedule,
 	if ingest {
 		return nil, nil
 	}
-	return Open(c.Trajectory, c.Resolution.Duration)
+	if c.Trajectory != "" {
+		return Open(c.Trajectory, c.Resolution.Duration)
+	}
+	return OpenReader(os.Stdin, c.Resolution.Duration)
 }
 
 func writeSchedule(w io.Writer, es []*Entry, when time.Time, fs fileset) (map[string]int, error) {

@@ -127,15 +127,8 @@ func (s *Schedule) scheduleMXGS(on, off, wait, azm, margin, saa time.Duration) (
 	predicate := func(e, a *Period) bool { return e.Overlaps(a) }
 	var es []*Entry
 
-	saas := make([]*Period, 0, len(s.Saas))
-	for _, s := range s.Saas {
-		if saa > 0 && s.Duration() < saa {
-			continue
-		}
-		saas = append(saas, s)
-	}
 	for _, e := range s.Eclipses {
-		as := isCrossingList(e, saas, predicate)
+		as := isCrossingList(e, s.Saas, predicate)
 		// if len(as) > 0 && e.Duration() <= on+off+margin+wait {
 		// 	log.Println("skip due to eclipse duration", e.Starts, e.Ends, e.Duration(), on+off+margin+wait)
 		// 	continue
@@ -234,18 +227,24 @@ func (p Period) Intersect(o *Period) time.Duration {
 }
 
 func scheduleROCON(e, s *Period, on, wait, azm time.Duration) *Entry {
-	y := &Entry{Label: ROCON, When: e.Starts.Add(wait)}
+	y := Entry{Label: ROCON, When: e.Starts.Add(wait)}
 	if s == nil {
-		return y
+		return &y
 	}
-
+	// if s.Duration() <= 30*time.Second {
+	// 	enter, exit := s.Starts, s.Starts.Add(2*azm)
+	// 	if isBetween(enter, exit, y.When) || isBetween(enter, exit, y.When.Add(on)) {
+	// 		y.When = exit
+	// 	}
+	// 	return &y
+	// }
 	if isBetween(s.Starts, s.Starts.Add(azm), y.When) || isBetween(s.Starts, s.Starts.Add(azm), y.When.Add(on)) {
 		y.When = s.Starts.Add(azm)
 	}
 	if isBetween(s.Ends, s.Ends.Add(azm), y.When) || isBetween(s.Ends, s.Ends.Add(azm), y.When.Add(on-time.Second)) {
 		y.When = s.Ends.Add(azm)
 	}
-	return y
+	return &y
 }
 
 func scheduleROCOFF(e, s *Period, off, azm time.Duration) *Entry {
@@ -253,6 +252,13 @@ func scheduleROCOFF(e, s *Period, off, azm time.Duration) *Entry {
 	if s == nil {
 		return y
 	}
+	// if s.Duration() <= 30*time.Second {
+	// 	enter, exit := s.Starts, s.Starts.Add(2*azm)
+	// 	if isBetween(enter, exit, y.When) || isBetween(enter, exit, y.When.Add(-off)) {
+	// 		y.When = enter.Add(-off)
+	// 	}
+	// 	return &y
+	// }
 	if isBetween(s.Ends, s.Ends.Add(azm), y.When) || isBetween(s.Ends, s.Ends.Add(azm), y.When.Add(off)) {
 		y.When = s.Ends.Add(-off)
 	}
@@ -263,7 +269,7 @@ func scheduleROCOFF(e, s *Period, off, azm time.Duration) *Entry {
 }
 
 func isBetween(f, t, d time.Time) bool {
-	return f.Equal(d) || t.Equal(d) || f.Before(d) && t.After(d)
+	return f.Before(t) && (f.Equal(d) || t.Equal(d) || f.Before(d) && t.After(d))
 }
 
 func listPeriods(r io.Reader, resolution time.Duration) ([]*Period, []*Period, error) {
