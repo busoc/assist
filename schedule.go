@@ -141,8 +141,8 @@ func (s *Schedule) scheduleMXGS(on, off, wait, azm, margin, saa time.Duration) (
 		default:
 			s1, s2 = as[0], as[z-1]
 		}
-		rocon := scheduleROCON(e, s1, on, wait, azm)
-		rocoff := scheduleROCOFF(e, s2, off, azm)
+		rocon := scheduleROCON(e, s1, on, wait, azm, saa)
+		rocoff := scheduleROCOFF(e, s2, off, azm, saa)
 
 		if margin > 0 && rocoff.When.Sub(rocon.When.Add(on)) <= margin {
 			if !s.Ignore {
@@ -226,18 +226,18 @@ func (p Period) Intersect(o *Period) time.Duration {
 	return delta
 }
 
-func scheduleROCON(e, s *Period, on, wait, azm time.Duration) *Entry {
+func scheduleROCON(e, s *Period, on, wait, azm, saa time.Duration) *Entry {
 	y := Entry{Label: ROCON, When: e.Starts.Add(wait)}
 	if s == nil {
 		return &y
 	}
-	// if s.Duration() <= 30*time.Second {
-	// 	enter, exit := s.Starts, s.Starts.Add(2*azm)
-	// 	if isBetween(enter, exit, y.When) || isBetween(enter, exit, y.When.Add(on)) {
-	// 		y.When = exit
-	// 	}
-	// 	return &y
-	// }
+	if saa > 0 && s.Duration() <= saa {
+		enter, exit := s.Starts, s.Starts.Add(2*azm)
+		if isBetween(enter, exit, y.When) || isBetween(enter, exit, y.When.Add(on)) {
+			y.When = exit
+		}
+		return &y
+	}
 	if isBetween(s.Starts, s.Starts.Add(azm), y.When) || isBetween(s.Starts, s.Starts.Add(azm), y.When.Add(on)) {
 		y.When = s.Starts.Add(azm)
 	}
@@ -247,25 +247,25 @@ func scheduleROCON(e, s *Period, on, wait, azm time.Duration) *Entry {
 	return &y
 }
 
-func scheduleROCOFF(e, s *Period, off, azm time.Duration) *Entry {
-	y := &Entry{Label: ROCOFF, When: e.Ends.Add(-off)}
+func scheduleROCOFF(e, s *Period, off, azm, saa time.Duration) *Entry {
+	y := Entry{Label: ROCOFF, When: e.Ends.Add(-off)}
 	if s == nil {
-		return y
+		return &y
 	}
-	// if s.Duration() <= 30*time.Second {
-	// 	enter, exit := s.Starts, s.Starts.Add(2*azm)
-	// 	if isBetween(enter, exit, y.When) || isBetween(enter, exit, y.When.Add(-off)) {
-	// 		y.When = enter.Add(-off)
-	// 	}
-	// 	return &y
-	// }
+	if saa > 0 && s.Duration() <= saa {
+		enter, exit := s.Starts, s.Starts.Add(2*azm)
+		if isBetween(enter, exit, y.When) || isBetween(enter, exit, y.When.Add(off)) {
+			y.When = enter.Add(-off)
+		}
+		return &y
+	}
 	if isBetween(s.Ends, s.Ends.Add(azm), y.When) || isBetween(s.Ends, s.Ends.Add(azm), y.When.Add(off)) {
 		y.When = s.Ends.Add(-off)
 	}
 	if isBetween(s.Starts, s.Starts.Add(azm-time.Second), y.When) || isBetween(s.Starts, s.Starts.Add(azm), y.When.Add(off)) {
 		y.When = s.Starts.Add(-off)
 	}
-	return y
+	return &y
 }
 
 func isBetween(f, t, d time.Time) bool {
