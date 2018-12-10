@@ -20,8 +20,8 @@ import (
 const timeFormat = "2006-01-02T15:04:05.000000"
 
 const (
-	Version   = "1.0.0"
-	BuildTime = "2018-11-28 13:55:00"
+	Version   = "1.0.1"
+	BuildTime = "2018-12-10 09:27:00"
 	Program   = "assist"
 )
 
@@ -56,6 +56,11 @@ type delta struct {
 	Intersect Duration `toml:"crossing"`
 	AZM       Duration `toml:"azm"`
 	Saa       Duration `toml:"saa"`
+
+	CerBefore    Duration `toml:"cer-before"`
+	CerAfter     Duration `toml:"cer-after"`
+	CerBeforeRoc Duration `toml:"cer-before-roc"`
+	CerAfterRoc  Duration `toml:"cer-after-roc"`
 }
 
 type fileset struct {
@@ -139,14 +144,18 @@ information):
   - keep-comment = schedule contains the comment present in the command files
 
 * delta   : configuring the various time used to schedule the ROC and CER commands
-  - wait     = wait time after entering eclipse for ROCON to be scheduled
-  - azm      = duration of the AZM
-  - rocon    = expected time of the ROCON
-  - rocoff   = expected time of the ROCOFF
-  - margin   = minium interval of time between ROCON end and ROCOFF start
-  - cer      = time before entering eclipse to activate CER(ON|OFF)
-  - crossing = mininum time of SAA and Eclipse
-  - saa      = mininum SAA duration to have an AZM scheduled
+  - wait           = wait time after entering eclipse for ROCON to be scheduled
+  - azm            = duration of the AZM
+  - rocon          = expected time of the ROCON
+  - rocoff         = expected time of the ROCOFF
+  - margin         = minium interval of time between ROCON end and ROCOFF start
+  - cer            = time before entering eclipse to activate CER(ON|OFF)
+  - cer-before     = time before SAA during eclipse to schedule CERON
+  - cer-after      = time after SAA during eclipse to schedule CEROFF
+  - cer-before-roc = time before ROCON/ROCOFF to schedule a CERON
+  - cer-after-roc  = time after ROCON/ROCOFF to schedule a CEROFF
+  - crossing       = mininum time of SAA and Eclipse
+  - saa            = mininum SAA duration to have an AZM scheduled
 
 * commands: configuring the location of the files that contain the commands
   - rocon  = file with commands for ROCON in text format
@@ -162,6 +171,10 @@ Options:
   -roc-margin     TIME  margin time between ROCON end and ROCOFF start
   -cer-time       TIME  TIME before Eclipse to switch CER(ON|OFF)
   -cer-crossing   TIME  minimum crossing time of SAA and Eclipse to switch CER(ON|OFF)
+  -cer-before     TIME  schedule CERON TIME before entering SAA during eclipse
+  -cer-after      TIME  schedule CEROFF TIME before leaving SAA during eclipse
+  -cer-before-roc TIME  delay CERON before ROC when conflict
+  -cer-after-roc  TIME  delay CEROFF after ROC when conflict
   -azm            TIME  AZM duration
   -saa            TIME  SAA duration
   -rocon-file     FILE  use FILE with commands for ROCON
@@ -183,7 +196,8 @@ Options:
 Examples:
 
 # create a full schedule keeping the comments from the given command files with
-a longer AZM for ROCON/ROCOFF and a larger margin for CERON/CEROFF
+# a longer AZM for ROCON/ROCOFF and a larger margin for CERON/CEROFF
+# this command enable the classical algorithm to schedule CERON/CEROFF
 $ assist -keep-comment -base-time 2018-11-19T12:35:00Z \
   -rocon-file /usr/local/etc/asim/MXGS-ROCON.txt \
   -rocoff-file /usr/local/etc/asim/MXGS-ROCOFF.txt \
@@ -196,10 +210,20 @@ $ assist -keep-comment -base-time 2018-11-19T12:35:00Z \
   inspect-trajectory.csv
 
 # create a schedule only for CER (the same can be done for ROC).
+# this command enable the classical algorithm to schedule CERON/CEROFF
 $ assist -keep-comment -base-time 2018-11-19T12:35:00Z \
   -ceron-file /usr/local/etc/asim/MMIA-CERON.txt \
   -ceroff-file /usr/local/etc/asim/MMIA-CEROFF.txt \
   -cer-time 900s \
+  -alliop /var/asim/CER-2018-310/alliop.txt \
+  inspect-trajectory.csv
+
+# Same command as previous but this time CERON/CEROFF will be scheduled according
+# to the new algorithm (using the default value for the cer-before, cer-after,...
+# options).
+$ assist -keep-comment -base-time 2018-11-19T12:35:00Z \
+  -ceron-file /usr/local/etc/asim/MMIA-CERON.txt \
+  -ceroff-file /usr/local/etc/asim/MMIA-CEROFF.txt \
   -alliop /var/asim/CER-2018-310/alliop.txt \
   inspect-trajectory.csv
 
@@ -229,19 +253,28 @@ func init() {
 func main() {
 	var fs fileset
 	d := delta{
-		Rocon:     Duration{time.Second * 50},
-		Rocoff:    Duration{time.Second * 80},
-		Margin:    Duration{time.Second * 120},
-		Cer:       Duration{time.Second * 300},
-		Intersect: Duration{DefaultIntersectTime},
-		AZM:       Duration{time.Second * 40},
-		Saa:       Duration{time.Second * 10},
+		Rocon:  Duration{time.Second * 50},
+		Rocoff: Duration{time.Second * 80},
+		Margin: Duration{time.Second * 120},
+		// Cer:          Duration{time.Second * 300},
+		Cer:          Duration{0},
+		Intersect:    Duration{DefaultIntersectTime},
+		AZM:          Duration{time.Second * 40},
+		Saa:          Duration{time.Second * 10},
+		CerBefore:    Duration{time.Second * 50},
+		CerAfter:     Duration{time.Second * 15},
+		CerBeforeRoc: Duration{time.Second * 45},
+		CerAfterRoc:  Duration{time.Second * 10},
 	}
 	flag.Var(&d.Rocon, "rocon-time", "ROCON execution time")
 	flag.Var(&d.Rocoff, "rocoff-time", "ROCOFF execution time")
 	flag.Var(&d.Wait, "rocon-wait", "wait time before starting ROCON")
 	flag.Var(&d.Cer, "cer-time", "delta CER margin time")
 	flag.Var(&d.Intersect, "cer-crossing", "intersection time to enable CER")
+	flag.Var(&d.CerBefore, "cer-before", "schedule CERON before SAA")
+	flag.Var(&d.CerAfter, "cer-after", "schedule CEROFF after SAA")
+	flag.Var(&d.CerBeforeRoc, "cer-before-roc", "schedule CERON before ROC when conflict")
+	flag.Var(&d.CerAfterRoc, "cer-after-roc", "schedule CEROFF after ROC when conflict")
 	flag.Var(&d.AZM, "azm", "default AZM duration")
 	flag.Var(&d.Margin, "roc-margin", "ROC margin")
 	flag.Var(&d.Saa, "saa", "default SAA duration")

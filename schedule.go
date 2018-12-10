@@ -106,33 +106,103 @@ func (s *Schedule) Schedule(d delta, roc, cer bool) ([]*Entry, error) {
 	}
 	var es []*Entry
 	if roc {
-		if vs, err := s.scheduleMXGS(d.Rocon.Duration, d.Rocoff.Duration, d.Wait.Duration, d.AZM.Duration, d.Margin.Duration, d.Saa.Duration); err != nil {
+		if vs, err := s.scheduleROC(d.Rocon.Duration, d.Rocoff.Duration, d.Wait.Duration, d.AZM.Duration, d.Margin.Duration, d.Saa.Duration); err != nil {
 			return nil, err
 		} else {
 			es = append(es, vs...)
 		}
 	}
-	if cer {
-		if vs, err := s.scheduleMMIA(d.Cer.Duration, d.Intersect.Duration); err != nil {
+	switch {
+	case cer && d.Cer.Duration > 0:
+		if vs, err := s.scheduleOutsideCER(d.Cer.Duration, d.Intersect.Duration); err != nil {
 			return nil, err
 		} else {
 			es = append(es, vs...)
 		}
+	case cer && d.Cer.Duration == 0:
+		if vs, err := s.scheduleInsideCER(d, es); err != nil {
+			return nil, err
+		} else {
+			es = append(es, vs...)
+		}
+	default:
 	}
 	sort.Slice(es, func(i, j int) bool { return es[i].When.Before(es[j].When) })
 	return es, nil
 }
 
-func (s *Schedule) scheduleMXGS(on, off, wait, azm, margin, saa time.Duration) ([]*Entry, error) {
+func (s *Schedule) scheduleInsideCER(d delta, rs []*Entry) ([]*Entry, error) {
+	predicate := func(e, a *Period) bool { return e.Overlaps(a) }
+
+	var es []*Entry
+	for _, e := range s.Eclipses {
+		as := isCrossingList(e, s.Saas, predicate)
+
+		var p *Period
+		switch len(as) {
+		case 0:
+			continue
+		case 1:
+			p = as[0]
+		default:
+			f, t := as[0], as[len(as)-1]
+			p = &Period{Starts: f.Starts, Ends: t.Ends}
+		}
+		if p.Duration() < d.Intersect.Duration {
+			continue
+		}
+		cn := Entry{Label: CERON, When: p.Starts.Add(-d.CerBefore.Duration)}
+		for i := len(rs) - 1; i >= 0; i-- {
+			r := rs[i]
+			if isBetween(r.When, r.When.Add(d.Rocon.Duration), cn.When) || isBetween(r.When, r.When.Add(d.Rocon.Duration), cn.When.Add(d.CerBefore.Duration)) {
+				cn.When = r.When.Add(-d.CerBeforeRoc.Duration)
+				break
+			}
+		}
+		cf := Entry{Label: CEROFF, When: p.Ends.Add(d.CerAfter.Duration)}
+		for i := 0; i < len(rs); i++ {
+			r := rs[i]
+			if isBetween(r.When, r.When.Add(d.Rocoff.Duration), cf.When) || isBetween(r.When, r.When.Add(d.Rocoff.Duration), cf.When.Add(d.CerAfter.Duration)) {
+				cf.When = r.When.Add(d.Rocoff.Duration + d.CerAfterRoc.Duration)
+				break
+			}
+		}
+		es = append(es, &cn, &cf)
+	}
+	return es, nil
+}
+
+func (s *Schedule) scheduleOutsideCER(delta, intersect time.Duration) ([]*Entry, error) {
+	eclipses := make([]*Period, len(s.Eclipses))
+	copy(eclipses, s.Eclipses)
+
+	var (
+		crossing bool
+		es       []*Entry
+	)
+	predicate := func(e, a *Period) bool {
+		return intersect == 0 || e.Intersect(a) > intersect
+	}
+	for len(eclipses) > 0 {
+		e := eclipses[0]
+		if a := isCrossing(e, s.Saas, predicate); a != nil {
+			crossing = true
+			es = append(es, &Entry{Label: CERON, When: e.Starts.Add(-delta)})
+		} else {
+			crossing = false
+			es = append(es, &Entry{Label: CEROFF, When: e.Starts.Add(-delta)})
+		}
+		eclipses = skipEclipses(eclipses[1:], s.Saas, crossing, intersect)
+	}
+	return es, nil
+}
+
+func (s *Schedule) scheduleROC(on, off, wait, azm, margin, saa time.Duration) ([]*Entry, error) {
 	predicate := func(e, a *Period) bool { return e.Overlaps(a) }
 	var es []*Entry
 
 	for _, e := range s.Eclipses {
 		as := isCrossingList(e, s.Saas, predicate)
-		// if len(as) > 0 && e.Duration() <= on+off+margin+wait {
-		// 	log.Println("skip due to eclipse duration", e.Starts, e.Ends, e.Duration(), on+off+margin+wait)
-		// 	continue
-		// }
 		var s1, s2 *Period
 		switch z := len(as); {
 		case z == 0:
@@ -157,31 +227,6 @@ func (s *Schedule) scheduleMXGS(on, off, wait, azm, margin, saa time.Duration) (
 			rocon.Warning, rocoff.Warning = true, true
 		}
 		es = append(es, rocon, rocoff)
-	}
-	return es, nil
-}
-
-func (s *Schedule) scheduleMMIA(delta, intersect time.Duration) ([]*Entry, error) {
-	eclipses := make([]*Period, len(s.Eclipses))
-	copy(eclipses, s.Eclipses)
-
-	var (
-		crossing bool
-		es       []*Entry
-	)
-	predicate := func(e, a *Period) bool {
-		return intersect == 0 || e.Intersect(a) > intersect
-	}
-	for len(eclipses) > 0 {
-		e := eclipses[0]
-		if a := isCrossing(e, s.Saas, predicate); a != nil {
-			crossing = true
-			es = append(es, &Entry{Label: CERON, When: e.Starts.Add(-delta)})
-		} else {
-			crossing = false
-			es = append(es, &Entry{Label: CEROFF, When: e.Starts.Add(-delta)})
-		}
-		eclipses = skipEclipses(eclipses[1:], s.Saas, crossing, intersect)
 	}
 	return es, nil
 }
