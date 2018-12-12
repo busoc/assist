@@ -1,0 +1,88 @@
+.TH assist 1 "2018-12-12" "1.0.1"
+
+.SH NAME
+assist - ASIM Semi Automatic Schedule Tool
+
+.SH SYNOPSIS
+assist [-base-time] [-list] <trajectory>
+assist [-base-time] [-list] [-config] <config.toml>
+
+assist [-base-time] [-rocon-time] [-rocoff-time] [-cer-time] [-cer-crossing] [-azm] [-saa] <trajectory>
+
+assist [-base-time] [-ingest] <list>
+assist [-base-time] [-ingest] [-config] <config.toml> <list>
+
+.SH DESCRIPTION
+assist implements the algorithm to create schedules that put the MXGS and MMIA instruments of ASIM in a correct configuration for ISS eclipses and SAA crossing.
+
+.SH OPTIONS
+.IP "-base-time <DATETIME>"
+Start the schedule with the first eclipse starting after the given DATETIME (RFC3339 format)
+.IP "-alliop <FILE>"
+Save schedule to FILE
+.IP "-instrlist <FILE>"
+Save instrument list to FILE
+.IP "-config"
+Use a configuration file to set various parameters
+.IP "-list"
+Print the list of blocks that will be schedule from the trajectory
+.IP "-list-periods"
+Print the list of eclipses and SAA from the trajectory
+.IP "-ignore"
+When using list, ignore constraints set to ROCON/ROCOFF
+.IP "-keep-comment"
+Write comments from the commands file into the schedule file. Setting this flag to true
+force also assist to add its own comments. A comment is a line starting with a #.
+.IP "-resolution <TIME>"
+Interval of TIME between two rows in the trajectory file
+.IP "-version"
+Print version and exit
+.IP "-help"
+Print a help message and exit
+
+.SH ROC OPTIONS
+.IP "-rocon-time <TIME>"
+ROCON expected execution time
+.IP "-rocoff-time <TIME>"
+ROCOFF expected execution time
+.IP "-rocon-wait <TIME>"
+wait TIME after entering eclipse before scheduling ROCON
+.IP "-roc-margin <TIME>"
+minimum margin TIME between end of ROCON and start of ROCOFF
+.IP "-rocon-file <FILE>"
+use FILE with commands for ROCON
+.IP "-rocoff-file <FILE>"
+use FILE with commands for ROCOFF
+.IP "-azm <TIME>"
+expected on-board AZM dururation
+.IP "-saa <TIME>"
+SAA duration to resolve conflict between ROCON and ROCOFF
+
+.SH CER OPTIONS
+.IP "-cer-time <TIME>"
+TIME before entering eclipse to switch CERON/CEROFF
+.IP "-cer-crossing <TIME>"
+minimum crossing TIME of SAA and eclipse to switch CERON
+.IP "-cer-before <TIME>"
+schedule CERON TIME before SAA enter during eclipse
+.IP "-cer-after <TIME>"
+schedule CEROFF TIME before SAA exit during eclipse
+.IP "-cer-before-roc <TIME>"
+delay CERON before when conflict with ROCON/ROCOFF
+.IP "-cer-after-roc <TIME>"
+delay CEROFF before when conflict with ROCON/ROCOFF
+.IP "-ceron-file <FILE>"
+use FILE with commands for CERON
+.IP "-ceroff-file <FILE>"
+use FILE with commands for CEROFF
+
+.SH EXAMPLES
+
+.SH SEE ALSO
+inspect(1), assist.toml(5), assist.list(5), inspect.toml(5), trajectory.csv(5)
+
+.SH FILES
+.I /usr/share/doc/asim-ccn26/examples/assist.toml
+.RS
+example for an assist configuration file
+.RE

@@ -1,38 +1,27 @@
-#expected execution time of the AZM
-alliop       = "tmp/alliop.txt"
-instrlist    = "tmp/instrlist.txt"
+alliop = "/var/run/asim/alliop.txt"
+instrlist = "/var/run/asim/instrlist.txt"
 keep-comment = true
 
-path = "tmp/cerroc/trajectory.csv"
+path = "/var/run/asim/trajectory.csv"
 resolution = "10s"
 
 [delta]
 wait     = "90s"
-rocon    = "10s"
+rocon    = "50s"
 rocoff   = "80s"
-cer      = "900s"
+cer      = "0s"
 crossing = "120s"
+azm      = "40s"
+saa      = "30s"
+margin   = "0"
+
+cer-before     = "50s"
+cer-after      = "15s"
+cer-before-roc = "45s"
+cer-after-roc  = "10s"
 
 [commands]
-rocon  = "tmp/cerroc/MXGS_ROCON.txt"
-rocoff = "tmp/cerroc/MXGS_ROCOFF.txt"
-ceron  = "tmp/cerroc/MMIA_CERON.txt"
-ceroff = "tmp/cerroc/MMIA_CEROFF.txt"
-
-# [rocon]
-# file  = "tmp/cerroc/MXGS_ROCON.txt"
-# time  = "10s"
-# wait = "90s"
-#
-# [rocoff]
-# file  = "tmp/cerroc/MXGS_ROCOFF.txt"
-# time = "80s"
-#
-# [ceron]
-# file     = "tmp/cerroc/MMIA_CERON.txt"
-# time     = "900s"
-# crossing = "120s"
-#
-# [ceroff]
-# file      = "tmp/cerroc/MMIA_CEROFF.txt"
-# time     = "900s"
+rocon  = "/etc/asim/MXGS_ROCON.txt"
+rocoff = "/etc/asim/MXGS_ROCOFF.txt"
+ceron  = "/etc/asim/MMIA_CERON.txt"
+ceroff = "/etc/asim/MMIA_CEROFF.txt"
