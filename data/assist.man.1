@@ -17,6 +17,7 @@ assist implements the algorithm to create schedules that put the MXGS and MMIA
 instruments of ASIM in a correct configuration for ISS eclipses and SAA crossing.
 .
 .SH OPTIONS
+.SS INPUT/OUTPUT OPTIONS
 .TP
 .BI \-base-time\  DATETIME
 Start the schedule with the first eclipse starting after the given DATETIME
@@ -28,32 +29,17 @@ Save schedule to FILE
 .BI \-instrlist\  FILE
 Save instrument list to FILE
 .TP
-.BI \-config
-Use a configuration file to set various parameters
+.B \-config
+Use a configuration file to set various parameters. When this flag is set, the
+configuration file should always be the first argument given to assist
 .TP
-.B \-list
-Print the list of blocks that will be schedule from the trajectory
-.TP
-.B \-list-periods
-Print the list of eclipses and SAA from the trajectory
-.TP
-.B \-ignore
-When using list, ignore constraints set to ROCON/ROCOFF
-.TP
-.B \-keep-comment
-Write comments from the commands file into the schedule file. Setting this flag
-to true force also assist to add its own comments.
+.B \-ingest
+Read a possibly modified list to re create a schedule
 .TP
 .BI \-resolution\  TIME
 Interval of TIME between two rows in the trajectory file
-.TP
-.B \-version
-Print version and exit
-.TP
-.B \-help
-Print a help message and exit
 .
-.SH ROC OPTIONS
+.SS ROC OPTIONS
 .TP
 .BI \-rocon-time\  TIME
 ROCON expected execution time
@@ -79,7 +65,7 @@ Expected on-board AZM dururation
 .BI \-saa\  TIME
 SAA duration to resolve conflict between ROCON and ROCOFF
 .
-.SH CER OPTIONS
+.SS CER OPTIONS
 .TP
 .BI \-cer-time\  TIME
 TIME before entering eclipse to switch CERON/CEROFF
@@ -105,8 +91,49 @@ Use FILE with commands for CERON
 .BI \-ceroff-file\  FILE
 Use FILE with commands for CEROFF
 .
+.SS MISC OPTIONS
+.TP
+.B \-list
+Print the list of blocks that will be schedule from the trajectory
+.TP
+.B \-list-periods
+Print the list of eclipses and SAA from the trajectory
+.TP
+.B \-ignore
+When using list, ignore constraints set to ROCON/ROCOFF
+.TP
+.B \-keep-comment
+Write comments from the commands file into the schedule file. Setting this flag
+to true force also assist to add its own comments.
+.TP
+.B \-version
+Print version and exit
+.TP
+.B \-help
+Print a help message and exit
+.
 .SH EXAMPLES
-TO BE WRITTEN - COPIED from assist --help
+.EX
+set values via a config file instead of command line options:
+.RS
+.B assist -config /etc/asim/ops.toml
+.RE
+.EE
+.LP
+.EX
+gives the list of commands that could be scheduled from the given trajectory:
+.RS
+.B assist -list /tmp/trajectory.csv
+.RE
+.EE
+.LP
+.EX
+print the list of commands that could be scheduled directly from the output of
+inspect:
+.RS
+.B inspect -d 24h -i 10s -f csv https://celestrak.com/NORAD/elements/stations.txt | assist -list
+.RE
+.EE
 .
 .SH SEE ALSO
 inspect(1), assist.toml(5), assist.list(5), inspect.toml(5), trajectory.csv(5)

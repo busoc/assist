@@ -78,6 +78,35 @@ Use FILE with commands for CERON
 Use FILE with commands for CEROFF
 .
 .SH EXAMPLES
+.EX
+alliop = "/var/run/asim/alliop.txt"
+instrlist = "/var/run/asim/instrlist.txt"
+keep-comment = true
+
+path = "/var/run/asim/trajectory.csv"
+resolution = "10s"
+
+[delta]
+wait     = "90s"
+rocon    = "50s"
+rocoff   = "80s"
+cer      = "0s"
+crossing = "120s"
+azm      = "40s"
+saa      = "30s"
+margin   = "0"
+
+cer-before     = "50s"
+cer-after      = "15s"
+cer-before-roc = "45s"
+cer-after-roc  = "10s"
+
+[commands]
+rocon  = "/etc/asim/MXGS_ROCON.txt"
+rocoff = "/etc/asim/MXGS_ROCOFF.txt"
+ceron  = "/etc/asim/MMIA_CERON.txt"
+ceroff = "/etc/asim/MMIA_CEROFF.txt"
+.EE
 .
 .SH SEE ALSO
 inspect(1), assist(1), assist.list(5), inspect.toml(5), trajectory.csv(5)
