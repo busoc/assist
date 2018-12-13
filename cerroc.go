@@ -377,6 +377,8 @@ func main() {
 	log.Printf("settings: ROCON time: %s", d.Rocon.Duration)
 	log.Printf("settings: ROCOFF time: %s", d.Rocoff.Duration)
 	log.Printf("settings: CER time: %s", d.Cer.Duration)
+	log.Printf("settings: CERON time: %s", d.Ceron.Duration)
+	log.Printf("settings: CEROFF time: %s", d.Ceroff.Duration)
 	log.Printf("settings: CER crossing duration: %s", d.Intersect.Duration)
 
 	var w io.Writer
@@ -594,6 +596,8 @@ func writePreamble(w io.Writer, when time.Time) {
 	stamp := when.Add(Leap)
 
 	fmt.Fprintf(w, "# %s-%s (build: %s)", Program, Version, BuildTime)
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "# " + strings.Join(os.Args, " "))
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "# execution time: %s", ExecutionTime)
 	fmt.Fprintln(w)
