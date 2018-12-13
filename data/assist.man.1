@@ -4,17 +4,138 @@
 assist \- ASIM Semi Automatic Schedule Tool
 .
 .SH SYNOPSIS
-assist [-base-time] [-list] <trajectory>
-assist [-base-time] [-list] [-config] <config.toml>
-.
-assist [-base-time] [-rocon-time] [-rocoff-time] [-cer-time] [-cer-crossing] [-azm] [-saa] <trajectory>
-.
-assist [-base-time] [-ingest] <list>
-assist [-base-time] [-ingest] [-config] <config.toml> <list>
+.SY assist
+.OP \-rocon-time time
+.OP \-rocoff-time time
+.OP \-rocoff-wait time
+.OP \-rocon-file file
+.OP \-rocoff-file file
+.OP \-roc-margin time
+.OP \-saa time
+.OP \-azm time
+.OP \-ceron-time time
+.OP \-ceroff-time time
+.OP \-cer-time time
+.OP \-cer-before time
+.OP \-cer-after time
+.OP \-cer-before-roc time
+.OP \-cer-after-roc time
+.OP \-cer-crossing time
+.OP \-ceron-file file
+.OP \-ceroff-file file
+.OP \-alliop file
+.OP \-instrlist file
+.OP \-resolution time
+.OP \-keep-comment
+.OP \-base-time datetime
+.OP \-list
+.OP \-list-periods
+.OP \-ignore
+.RI < trajectory.csv >
+.IR
+.YS
+.SY assist
+.OP \-rocon-time time
+.OP \-rocoff-time time
+.OP \-rocoff-wait time
+.OP \-rocon-file file
+.OP \-rocoff-file file
+.OP \-roc-margin time
+.OP \-saa time
+.OP \-azm time
+.OP \-ceron-time time
+.OP \-ceroff-time time
+.OP \-cer-time time
+.OP \-cer-before time
+.OP \-cer-after time
+.OP \-cer-before-roc time
+.OP \-cer-after-roc time
+.OP \-cer-crossing time
+.OP \-ceron-file file
+.OP \-ceroff-file file
+.OP \-alliop file
+.OP \-instrlist file
+.OP \-resolution time
+.OP \-keep-comment
+.OP \-base-time datetime
+.OP \-list
+.OP \-list-periods
+.OP \-ignore
+.OP \-config
+.RI < config.toml >
+.IR
+.YS
+.SY assist
+.OP \-ingest
+.OP \-config
+.RI < config.toml >
+.IR
+.RI < list.csv >
+.IR
+.YS
+.SY assist
+.OP \-ingest
+.RI < list.csv >
+.IR
+.YS
+.SY assist
+.OP \-help
+.YS
+.YS
+.SY assist
+.OP \-version
+.YS
 .
 .SH DESCRIPTION
 assist implements the algorithm to create schedules that put the MXGS and MMIA
 instruments of ASIM in a correct configuration for ISS eclipses and SAA crossing.
+.
+.SS ROCON SCHEDULING
+.nr step 1 1
+The following steps describe how assist schedule a ROCON:
+.IP \n[step]
+schedule ROCON at time of entering eclipse + rocon-wait
+.IP \n+[step]
+no SAA crossing, ROCON done
+.IP \n+[step]
+duration SAA crossing lesser than threshold, double the duration of AZM. If ROCON
+overlaps with [start SAA, start SAA+2*AZM], schedule ROCON at end of interval
+.IP \n+[step]
+ROCON starts during AZM (SAA enter or exit), move ROCON time at end of AZM
+.IP \n+[step]
+ROCON ends during AZM (SAA enter or exit), move ROCON time start at end of AZM
+.
+.SS ROCOFF SCHEDULING
+.nr step 1 1
+The following steps describe how assist schedule a ROCOFF:
+.IP \n[step]
+schedule ROCOFF at time of exiting eclipse - rocoff-time
+.IP \n+[step]
+no SAA crossing, ROCOFF done
+.IP \n+[step]
+duration SAA crossing lesser than threshold, double the duration of AZM. If ROCOFF
+overlaps with [start SAA, start SAA+2*AZM], schedule ROCOFF at start of interval
+.IP \n+[step]
+ROCOFF ends during AZM (SAA enter or exit), move ROCON time start at start
+of SAA - rocoff-time
+.IP \n+[step]
+ROCOFF starts during AZM (SAA enter or exit), move ROCOFF time at start
+of SAA - rocoff-time
+.
+.SS CER SCHEDULING
+.P
+assist has two different ways to schedule Cosmic Event Rejections.
+.P
+The first, CERON and CEROFF are scheduled outside of eclipses. In this case, one
+CERON is scheduled for multiple eclipses while there are SAA crossing of at least
+[cer-crossing]. As soon as there is an eclipse without a SAA crossing, a CEROFF
+is scheduled.
+.P
+The second, CERON and CEROFF are scheduled around every SAA crossing during an
+eclipse.
+.
+.SS CER, ROC CONFLICTS
+To be written
 .
 .SH OPTIONS
 .SS INPUT/OUTPUT OPTIONS
