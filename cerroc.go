@@ -50,6 +50,8 @@ var (
 type delta struct {
 	Rocon     Duration `toml:"rocon"`
 	Rocoff    Duration `toml:"rocoff"`
+	Ceron     Duration `toml:"ceron"`
+	Ceroff    Duration `toml:"ceron"`
 	Margin    Duration `toml:"margin"`
 	Cer       Duration `toml:"cer"`
 	Wait      Duration `toml:"wait"`
@@ -255,6 +257,8 @@ func main() {
 	d := delta{
 		Rocon:  Duration{time.Second * 50},
 		Rocoff: Duration{time.Second * 80},
+		Ceron: Duration{time.Second*40},
+		Ceroff: Duration{time.Second*40},
 		Margin: Duration{time.Second * 120},
 		// Cer:          Duration{time.Second * 300},
 		Cer:          Duration{0},
@@ -268,8 +272,10 @@ func main() {
 	}
 	flag.Var(&d.Rocon, "rocon-time", "ROCON execution time")
 	flag.Var(&d.Rocoff, "rocoff-time", "ROCOFF execution time")
+	flag.Var(&d.Ceron, "ceron-time", "CERON execution time (not used to scheduled CER)")
+	flag.Var(&d.Ceroff, "ceroff-time", "CEROFF execution time (not used to scheduled CER)")
 	flag.Var(&d.Wait, "rocon-wait", "wait time before starting ROCON")
-	flag.Var(&d.Cer, "cer-time", "delta CER margin time")
+	flag.Var(&d.Cer, "cer-time", "schedule CER TIME before entering eclipse")
 	flag.Var(&d.Intersect, "cer-crossing", "intersection time to enable CER")
 	flag.Var(&d.CerBefore, "cer-before", "schedule CERON before SAA")
 	flag.Var(&d.CerAfter, "cer-after", "schedule CEROFF after SAA")
@@ -348,8 +354,10 @@ func main() {
 				to = e.When.Add(d.Rocon.Duration)
 			case ROCOFF:
 				to = e.When.Add(d.Rocoff.Duration)
-			case CERON, CEROFF:
-				to = e.When.Add(d.Cer.Duration)
+			case CERON:
+				to = e.When.Add(d.Ceron.Duration)
+			case CEROFF:
+				to = e.When.Add(d.Ceroff.Duration)
 			}
 			conflict := "-"
 			if e.Warning {
