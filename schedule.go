@@ -34,7 +34,7 @@ type Entry struct {
 }
 
 func SOY(t time.Time) int64 {
-	year := t.AddDate(0, 0, -t.YearDay()+1).Truncate(Day).Add(Leap)
+	year := t.AddDate(0, 0, -t.YearDay()+1).Truncate(Day)
 	stamp := t.Add(Leap)
 	return stamp.Unix() - year.Unix()
 }
