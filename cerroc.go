@@ -337,7 +337,7 @@ func main() {
 	}
 	if *elist && !*ingest {
 		s.Ignore = *ignore
-		es, err := s.Filter(b).Schedule(d, true, true)
+		es, err := s.Filter(b).Schedule(d, fs.CanROC(), fs.CanCER())
 		if err != nil {
 			log.Fatalln(err)
 		}
