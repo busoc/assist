@@ -283,8 +283,18 @@ func scheduleROCON(e, s *Period, on, wait, azm, saa time.Duration) *Entry {
 		}
 		return &y
 	}
+	// check that ROCON does not completly overlap AZM of SAA enter
+	// then check that ROCON does not start within the AZM of the SAA enter
+	if y.When.Before(s.Starts) && y.When.Add(on).After(s.Starts.Add(azm)) {
+		y.When = s.Starts.Add(azm)
+	}
 	if isBetween(s.Starts, s.Starts.Add(azm), y.When) || isBetween(s.Starts, s.Starts.Add(azm), y.When.Add(on)) {
 		y.When = s.Starts.Add(azm)
+	}
+	// check that ROCON does not completly overlap AZM of SAA exit
+	// then check that ROCON does not start within the AZM of the SAA exit
+	if y.When.Before(s.Ends) && y.When.Add(on).After(s.Ends.Add(azm)) {
+		y.When = s.Ends.Add(azm)
 	}
 	if isBetween(s.Ends, s.Ends.Add(azm), y.When) || isBetween(s.Ends, s.Ends.Add(azm), y.When.Add(on-time.Second)) {
 		y.When = s.Ends.Add(azm)
@@ -304,8 +314,18 @@ func scheduleROCOFF(e, s *Period, off, azm, saa time.Duration) *Entry {
 		}
 		return &y
 	}
+	// check that ROCOFF does not completly overlap AZM of SAA exit
+	// then check that ROCOFF does not start within the AZM of the SAA exit
+	if y.When.Before(s.Ends) && y.When.Add(off).After(s.Ends.Add(azm)) {
+		y.When = s.Ends.Add(azm)
+	}
 	if isBetween(s.Ends, s.Ends.Add(azm), y.When) || isBetween(s.Ends, s.Ends.Add(azm), y.When.Add(off)) {
 		y.When = s.Ends.Add(-off)
+	}
+	// check that ROCON does not completly overlap AZM of SAA enter
+	// then check that ROCON does not start within the AZM of the SAA enter
+	if y.When.Before(s.Starts) && y.When.Add(off).After(s.Starts.Add(azm)) {
+		y.When = s.Starts.Add(azm)
 	}
 	if isBetween(s.Starts, s.Starts.Add(azm-time.Second), y.When) || isBetween(s.Starts, s.Starts.Add(azm), y.When.Add(off)) {
 		y.When = s.Starts.Add(-off)

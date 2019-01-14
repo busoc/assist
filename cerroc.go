@@ -20,8 +20,8 @@ import (
 const timeFormat = "2006-01-02T15:04:05.000000"
 
 const (
-	Version   = "1.0.1"
-	BuildTime = "2018-12-10 09:27:00"
+	Version   = "1.0.2"
+	BuildTime = "2019-01-14 09:40:00"
 	Program   = "assist"
 )
 
@@ -337,7 +337,11 @@ func main() {
 	}
 	if *elist && !*ingest {
 		s.Ignore = *ignore
-		es, err := s.Filter(b).Schedule(d, fs.CanROC(), fs.CanCER())
+		canROC, canCER := fs.CanROC(), fs.CanCER()
+		if !canROC && !canCER {
+			canROC, canCER = true, true
+		}
+		es, err := s.Filter(b).Schedule(d, canROC, canCER)
 		if err != nil {
 			log.Fatalln(err)
 		}
