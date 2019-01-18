@@ -20,8 +20,8 @@ import (
 const timeFormat = "2006-01-02T15:04:05.000000"
 
 const (
-	Version   = "1.0.2"
-	BuildTime = "2019-01-14 09:40:00"
+	Version   = "1.0.3"
+	BuildTime = "2019-01-18 11:30:00"
 	Program   = "assist"
 )
 
@@ -66,6 +66,8 @@ type delta struct {
 }
 
 type fileset struct {
+	Path   string `toml:"-"`
+
 	Rocon  string `toml:"rocon"`
 	Rocoff string `toml:"rocoff"`
 	Ceron  string `toml:"ceron"`
@@ -320,6 +322,9 @@ func main() {
 		switch flag.NArg() {
 		default:
 			s, err = Open(flag.Arg(0), *resolution)
+			if err == nil {
+				fs.Path = flag.Arg(0)
+			}
 		case 0:
 			s, err = OpenReader(os.Stdin, *resolution)
 		}
@@ -349,7 +354,9 @@ func main() {
 			return
 		}
 		first, last := es[0], es[len(es)-1]
-		fmt.Printf("%3d | %s | %-9s | %9d | %s | %s", 0, " ", "SCHEDULE", SOY(first.When.Add(-Five)), first.When.Add(-Five).Format("2006-01-02T15:04:05"), last.When.Format("2006-01-02T15:04:05"))
+		fmt.Printf("%3s | %s | %-9s | %-9s | %-20s | %-20s", "#", "?", "TYPE", "SOY (GPS)", "START (GMT)", "END (GMT)")
+		fmt.Println()
+		fmt.Printf("%3d | %s | %-9s | %-9d | %-20s | %-20s", 0, " ", "SCHEDULE", SOY(first.When.Add(-Five)), first.When.Add(-Five).Format("2006-01-02T15:04:05"), last.When.Format("2006-01-02T15:04:05"))
 		fmt.Println()
 		for i, e := range es {
 			var to time.Time
@@ -368,7 +375,7 @@ func main() {
 				conflict = "!"
 			}
 
-			fmt.Printf("%3d | %s | %-9s | %9d | %s | %s", i+1, conflict, e.Label, e.SOY(), e.When.Format("2006-01-02T15:04:05"), to.Format("2006-01-02T15:04:05"))
+			fmt.Printf("%3d | %s | %-9s | %-9d | %-20s | %-20s", i+1, conflict, e.Label, e.SOY(), e.When.Format("2006-01-02T15:04:05"), to.Format("2006-01-02T15:04:05"))
 			fmt.Println()
 		}
 		return
@@ -438,7 +445,7 @@ func main() {
 	log.Printf("last command (%s) at %s (%d)", last.Label, last.When.Format(timeFormat), SOY(last.When))
 	b = es[0].When.Add(-Five)
 	writePreamble(w, b)
-	if err := writeMetadata(w, flag.Arg(0), fs); err != nil {
+	if err := writeMetadata(w, fs); err != nil {
 		log.Fatalln(err)
 	}
 	ms, err := writeSchedule(w, es, b, fs)
@@ -542,7 +549,7 @@ func loadFromConfig(file string, d *delta, fs *fileset, ingest bool) (*Schedule,
 	if err := toml.NewDecoder(r).Decode(&c); err != nil {
 		return nil, err
 	}
-	fs.Alliop, fs.Instrlist, fs.Keep = c.Alliop, c.Instr, c.Comment
+	fs.Path, fs.Alliop, fs.Instrlist, fs.Keep = c.Trajectory, c.Alliop, c.Instr, c.Comment
 	if ingest {
 		return nil, nil
 	}
@@ -610,8 +617,8 @@ func writePreamble(w io.Writer, when time.Time) {
 	fmt.Fprintln(w)
 }
 
-func writeMetadata(w io.Writer, rs string, fs fileset) error {
-	for _, f := range []string{rs, fs.Rocon, fs.Rocoff, fs.Ceron, fs.Ceroff} {
+func writeMetadata(w io.Writer, fs fileset) error {
+	for _, f := range []string{fs.Path, fs.Rocon, fs.Rocoff, fs.Ceron, fs.Ceroff} {
 		if f == "" {
 			continue
 		}
