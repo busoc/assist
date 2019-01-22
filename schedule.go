@@ -325,7 +325,7 @@ func scheduleROCOFF(e, s *Period, off, azm, saa time.Duration) *Entry {
 	// check that ROCON does not completly overlap AZM of SAA enter
 	// then check that ROCON does not start within the AZM of the SAA enter
 	if y.When.Before(s.Starts) && y.When.Add(off).After(s.Starts.Add(azm)) {
-		y.When = s.Starts.Add(azm)
+		y.When = s.Starts.Add(-off)
 	}
 	if isBetween(s.Starts, s.Starts.Add(azm-time.Second), y.When) || isBetween(s.Starts, s.Starts.Add(azm), y.When.Add(off)) {
 		y.When = s.Starts.Add(-off)
