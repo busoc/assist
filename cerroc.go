@@ -90,6 +90,25 @@ func (f fileset) Empty() bool {
 	return f.Rocon == "" && f.Rocoff == "" && f.Ceron == "" && f.Ceroff == ""
 }
 
+func (f fileset) Can() error {
+	if (f.Rocon == "" && f.Rocoff != "") || (f.Rocon != "" && f.Rocoff == "") {
+		return missingFile("ROC")
+	}
+	if f.Rocon == f.Rocoff {
+		return fmt.Errorf("same file for ROCON and ROCOFF given")
+	}
+	if (f.Ceron == "" && f.Ceroff != "") || (f.Ceron != "" && f.Ceroff == "") {
+		return missingFile("CER")
+	}
+	if f.Ceron == f.Ceroff {
+		return fmt.Errorf("same file for CERON and CEROFF given")
+	}
+	if f.Empty() {
+		return fmt.Errorf("no command files given")
+	}
+	return nil
+}
+
 const helpText = `ASIM Semi Automatic Schedule Tool
 
 Usage: assist [options] <trajectory.csv>
@@ -380,8 +399,8 @@ func main() {
 		}
 		return
 	}
-	if fs.Empty() {
-		log.Fatalln("no command files provided")
+	if err := fs.Can(); err != nil {
+		log.Fatalln(err)
 	}
 	log.Printf("%s-%s (build: %s)", Program, Version, BuildTime)
 	log.Printf("settings: AZM duration: %s", d.AZM.Duration)
