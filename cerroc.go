@@ -145,22 +145,8 @@ func main() {
 	default:
 		Exit(checkError(err, nil))
 	}
-	switch f, err := os.Create(fs.Instrlist); {
-	case err == nil:
-		digest := md5.New()
-		w := io.MultiWriter(f, digest)
-		defer f.Close()
-
-		if fs.CanROC() {
-			fmt.Fprintln(w, InstrMXGS)
-		}
-		if fs.CanCER() {
-			fmt.Fprintln(w, InstrMMIA)
-		}
-		log.Printf("md5 %s: %x", fs.Instrlist, digest.Sum(nil))
-	case err != nil && fs.Instrlist == "":
-	default:
-		Exit(checkError(err, nil))
+	if err := writeList(fs.Instrlist, fs.CanROC(), fs.CanCER()); err != nil {
+		Exit(err)
 	}
 	var es []*Entry
 	if *ingest {

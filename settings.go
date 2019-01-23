@@ -16,11 +16,6 @@ const (
 	INSTR  = "instrlist.txt"
 )
 
-const (
-	InstrMMIA = "MMIA 129"
-	InstrMXGS = "MXGS 128"
-)
-
 var (
 	ExecutionTime   time.Time
 	DefaultBaseTime time.Time

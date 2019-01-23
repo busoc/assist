@@ -13,6 +13,33 @@ import (
 	"time"
 )
 
+const (
+	InstrMMIA = "MMIA 129"
+	InstrMXGS = "MXGS 128"
+)
+
+func writeList(file string, roc, cer bool) error {
+	switch f, err := os.Create(file); {
+	case err == nil:
+		defer f.Close()
+
+		digest := md5.New()
+		w := io.MultiWriter(f, digest)
+
+		if roc {
+			fmt.Fprintln(w, InstrMXGS)
+		}
+		if cer {
+			fmt.Fprintln(w, InstrMMIA)
+		}
+		log.Printf("md5 %s: %x", file, digest.Sum(nil))
+	case err != nil && file == "":
+	default:
+		return checkError(err, nil)
+	}
+	return nil
+}
+
 func writeSchedule(w io.Writer, es []*Entry, when time.Time, fs fileset) (map[string]int, error) {
 	cid := 1
 	var err error
