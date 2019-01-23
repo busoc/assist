@@ -142,15 +142,14 @@ func main() {
 		Exit(err)
 	}
 	var es []*Entry
-	if *ingest {
-		fs := flag.Args()
-		if len(fs) <= 1 {
+	if files := flag.Args(); *ingest {
+		if len(files) <= 1 {
 			Exit(badUsage("no files to ingest"))
 		}
 		if *config {
-			fs = fs[1:]
+			files = files[1:]
 		}
-		es, err = ingestFiles(fs, b)
+		es, err = ingestFiles(files, b)
 	} else {
 		es, err = s.Filter(b).Schedule(d, fs.CanROC(), fs.CanCER())
 	}
