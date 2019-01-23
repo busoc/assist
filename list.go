@@ -32,6 +32,7 @@ func ListEntries(s *Schedule, b time.Time, d delta, fs fileset, ignore bool) err
 	fmt.Println()
 	fmt.Printf("%3d | %s | %-9s | %-9d | %-20s | %-20s", 0, " ", "SCHEDULE", SOY(first.When.Add(-Five)), first.When.Add(-Five).Format("2006-01-02T15:04:05"), last.When.Format("2006-01-02T15:04:05"))
 	fmt.Println()
+
 	for i, e := range es {
 		var to time.Time
 		switch e.Label {

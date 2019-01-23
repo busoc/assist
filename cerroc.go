@@ -88,12 +88,12 @@ func main() {
 
 	if *version {
 		fmt.Fprintf(os.Stderr, "%s-%s (%s)\n", Program, Version, BuildTime)
-		os.Exit(2)
+		return
 	}
 
 	b, err := time.Parse(time.RFC3339, *baseTime)
 	if err != nil && *baseTime != "" {
-		log.Fatalln(err)
+		Exit(badUsage("base-time format invalid"))
 	}
 	if b.IsZero() {
 		b = DefaultBaseTime
@@ -113,7 +113,7 @@ func main() {
 		}
 	}
 	if err != nil {
-		log.Fatalln(err)
+		Exit(err)
 	}
 	if *plist && !*ingest {
 		ListPeriods(s, b)
@@ -121,12 +121,12 @@ func main() {
 	}
 	if *elist && !*ingest {
 		if err := ListEntries(s, b, d, fs, *ignore); err != nil {
-			log.Fatalln(err)
+			Exit(err)
 		}
 		return
 	}
 	if err := fs.Can(); err != nil {
-		log.Fatalln(err)
+		Exit(err)
 	}
 	log.Printf("%s-%s (build: %s)", Program, Version, BuildTime)
 	log.Printf("settings: AZM duration: %s", d.AZM.Duration)
@@ -147,7 +147,7 @@ func main() {
 		fs.Alliop = "alliop"
 		w = io.MultiWriter(digest, os.Stdout)
 	default:
-		log.Fatalln(err)
+		Exit(err)
 	}
 	switch f, err := os.Create(fs.Instrlist); {
 	case err == nil:
@@ -164,13 +164,13 @@ func main() {
 		log.Printf("md5 %s: %x", fs.Instrlist, digest.Sum(nil))
 	case err != nil && fs.Instrlist == "":
 	default:
-		log.Fatalln(err)
+		Exit(err)
 	}
 	var es []*Entry
 	if *ingest {
 		fs := flag.Args()
 		if len(fs) <= 1 {
-			log.Fatalln("no files to ingest")
+			Exit(genericErr("no files to ingest"))
 		}
 		if *config {
 			fs = fs[1:]
@@ -180,7 +180,7 @@ func main() {
 		es, err = s.Filter(b).Schedule(d, fs.CanROC(), fs.CanCER())
 	}
 	if err != nil {
-		log.Fatalln(err)
+		Exit(err)
 	}
 	if len(es) == 0 {
 		return
@@ -191,11 +191,11 @@ func main() {
 	b = es[0].When.Add(-Five)
 	writePreamble(w, b)
 	if err := writeMetadata(w, fs); err != nil {
-		log.Fatalln(err)
+		Exit(err)
 	}
 	ms, err := writeSchedule(w, es, b, fs)
 	if err != nil {
-		log.Fatalln(err)
+		Exit(err)
 	}
 	for n, c := range ms {
 		log.Printf("%s scheduled: %d", n, c)
@@ -206,7 +206,7 @@ func main() {
 func loadFromConfig(file string, d *delta, fs *fileset, ingest bool) (*Schedule, error) {
 	r, err := os.Open(file)
 	if err != nil {
-		return nil, err
+		return nil, checkError(err, nil)
 	}
 	defer r.Close()
 
@@ -225,7 +225,7 @@ func loadFromConfig(file string, d *delta, fs *fileset, ingest bool) (*Schedule,
 		Commands: fs,
 	}
 	if err := toml.NewDecoder(r).Decode(&c); err != nil {
-		return nil, err
+		return nil, badUsage(fmt.Sprintf("invalid configuration file: %v", err))
 	}
 	fs.Path, fs.Alliop, fs.Instrlist, fs.Keep = c.Trajectory, c.Alliop, c.Instr, c.Comment
 	if ingest {
@@ -302,17 +302,17 @@ func writeMetadata(w io.Writer, fs fileset) error {
 		}
 		r, err := os.Open(f)
 		if err != nil {
-			return err
+			return checkError(err, nil)
 		}
 		defer r.Close()
 
 		digest := md5.New()
 		if _, err := io.Copy(digest, r); err != nil {
-			return err
+			return checkError(err, nil)
 		}
 		s, err := r.Stat()
 		if err != nil {
-			return err
+			return checkError(err, nil)
 		}
 		mod := s.ModTime().Format("2006-01-02 15:04:05")
 		log.Printf("%s: md5 = %x, lastmod: %s, size: %d bytes", f, digest.Sum(nil), mod, s.Size())
@@ -330,7 +330,7 @@ func prepareCommand(w io.Writer, file string, cid int, when time.Time, delta tim
 	}
 	bs, err := ioutil.ReadFile(file)
 	if err != nil {
-		return cid, 0, err
+		return cid, 0, checkError(err, nil)
 	}
 	d := scheduleDuration(bytes.NewReader(bs))
 	if d <= 0 {
@@ -366,8 +366,16 @@ func prepareCommand(w io.Writer, file string, cid int, when time.Time, delta tim
 			fmt.Fprintln(w, row)
 		}
 	}
+	switch e := s.Err(); e {
+	case bufio.ErrTooLong, bufio.ErrNegativeAdvance, bufio.ErrAdvanceTooFar:
+		err = badUsage(fmt.Sprintf("%s: processing failed (%v)", file, e))
+	default:
+		if e != nil {
+			err = badUsage(err.Error())
+		}
+	}
 	fmt.Fprintln(w)
-	return cid, elapsed, s.Err()
+	return cid, elapsed, err
 }
 
 func scheduleDuration(r io.Reader) time.Duration {
@@ -380,8 +388,4 @@ func scheduleDuration(r io.Reader) time.Duration {
 		}
 	}
 	return d
-}
-
-func missingFile(n string) error {
-	return fmt.Errorf("%s files should be provided by pair (on/off)", strings.ToUpper(n))
 }

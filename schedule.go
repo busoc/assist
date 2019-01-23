@@ -52,7 +52,7 @@ type Schedule struct {
 func Open(p string, d time.Duration) (*Schedule, error) {
 	r, err := os.Open(p)
 	if err != nil {
-		return nil, err
+		return nil, checkError(err, nil)
 	}
 	defer r.Close()
 	return OpenReader(r, d)
@@ -231,46 +231,6 @@ func (s *Schedule) scheduleROC(on, off, wait, azm, margin, saa time.Duration) ([
 	return es, nil
 }
 
-type Period struct {
-	Label        string
-	Starts, Ends time.Time
-}
-
-func (p Period) Duration() time.Duration {
-	return p.Ends.Sub(p.Starts)
-}
-
-func (p Period) IsZero() bool {
-	return p.Starts.IsZero() && p.Ends.IsZero()
-}
-
-func (p Period) Contains(o *Period) bool {
-	if o.Starts.Before(p.Starts) {
-		return false
-	}
-	return o.Starts.Add(o.Duration()).Before(p.Ends)
-}
-
-func (p Period) Overlaps(o *Period) bool {
-	return !(o.Starts.After(p.Ends) || o.Ends.Before(p.Starts))
-}
-
-func (p Period) Intersect(o *Period) time.Duration {
-	if !p.Overlaps(o) {
-		return 0
-	}
-	if p.Contains(o) {
-		return o.Duration()
-	}
-	var delta time.Duration
-	if p.Starts.After(o.Starts) {
-		delta = o.Ends.Sub(p.Starts)
-	} else {
-		delta = p.Ends.Sub(o.Starts)
-	}
-	return delta
-}
-
 func scheduleROCON(e, s *Period, on, wait, azm, saa time.Duration) *Entry {
 	y := Entry{Label: ROCON, When: e.Starts.Add(wait)}
 	if s == nil {
@@ -357,7 +317,7 @@ func listPeriods(r io.Reader, resolution time.Duration) ([]*Period, []*Period, e
 			break
 		}
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, badUsage(err.Error())
 		}
 		if isEnterPeriod(r[PredictEclipseIndex]) && e.IsZero() {
 			if e.Starts, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
@@ -398,10 +358,6 @@ func listPeriods(r io.Reader, resolution time.Duration) ([]*Period, []*Period, e
 	sort.Slice(es, func(i, j int) bool { return es[i].Starts.Before(es[j].Starts) })
 	sort.Slice(as, func(i, j int) bool { return as[i].Starts.Before(as[j].Starts) })
 	return es, as, nil
-}
-
-func timeBadSyntax(i int, v string) error {
-	return fmt.Errorf("time badly formatted at row %d (%s)", i+1, v)
 }
 
 func isEnterPeriod(r string) bool {

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -91,16 +90,16 @@ func (f fileset) Can() error {
 		return missingFile("ROC")
 	}
 	if f.Rocon == f.Rocoff {
-		return fmt.Errorf("same file for ROCON and ROCOFF given")
+		return sameFile("ROC")
 	}
 	if (f.Ceron == "" && f.Ceroff != "") || (f.Ceron != "" && f.Ceroff == "") {
 		return missingFile("CER")
 	}
 	if f.Ceron == f.Ceroff {
-		return fmt.Errorf("same file for CERON and CEROFF given")
+		return sameFile("CER")
 	}
 	if f.Empty() {
-		return fmt.Errorf("no command files given")
+		return genericErr("no command files given")
 	}
 	return nil
 }
