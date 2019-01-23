@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"time"
 )
 
@@ -20,6 +21,17 @@ var (
 	ExecutionTime   time.Time
 	DefaultBaseTime time.Time
 )
+
+func dumpSettings(d delta, fs fileset) {
+	log.Printf("%s-%s (build: %s)", Program, Version, BuildTime)
+	log.Printf("settings: AZM duration: %s", d.AZM.Duration)
+	log.Printf("settings: ROCON time: %s", d.Rocon.Duration)
+	log.Printf("settings: ROCOFF time: %s", d.Rocoff.Duration)
+	log.Printf("settings: CER time: %s", d.Cer.Duration)
+	log.Printf("settings: CERON time: %s", d.Ceron.Duration)
+	log.Printf("settings: CEROFF time: %s", d.Ceroff.Duration)
+	log.Printf("settings: CER crossing duration: %s", d.Intersect.Duration)
+}
 
 type Duration struct {
 	time.Duration

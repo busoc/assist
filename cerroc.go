@@ -124,14 +124,7 @@ func main() {
 	if err := fs.Can(); err != nil {
 		Exit(err)
 	}
-	log.Printf("%s-%s (build: %s)", Program, Version, BuildTime)
-	log.Printf("settings: AZM duration: %s", d.AZM.Duration)
-	log.Printf("settings: ROCON time: %s", d.Rocon.Duration)
-	log.Printf("settings: ROCOFF time: %s", d.Rocoff.Duration)
-	log.Printf("settings: CER time: %s", d.Cer.Duration)
-	log.Printf("settings: CERON time: %s", d.Ceron.Duration)
-	log.Printf("settings: CEROFF time: %s", d.Ceroff.Duration)
-	log.Printf("settings: CER crossing duration: %s", d.Intersect.Duration)
+	dumpSettings(d, fs)
 
 	var w io.Writer
 	digest := md5.New()
