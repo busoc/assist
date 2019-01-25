@@ -148,7 +148,7 @@ func (s *Schedule) scheduleInsideCER(d delta, rs []*Entry) ([]*Entry, error) {
 			f, t := as[0], as[len(as)-1]
 			p = &Period{Starts: f.Starts, Ends: t.Ends}
 		}
-		if p.Duration() < d.Intersect.Duration {
+		if p.Duration() < d.Intersect.Duration || e.Intersect(p) < d.Intersect.Duration {
 			continue
 		}
 		cn := Entry{Label: CERON, When: p.Starts.Add(-d.CerBefore.Duration)}
