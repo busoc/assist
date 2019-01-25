@@ -96,13 +96,13 @@ func (f fileset) Can() error {
 	if (f.Rocon == "" && f.Rocoff != "") || (f.Rocon != "" && f.Rocoff == "") {
 		return missingFile("ROC")
 	}
-	if f.Rocon == f.Rocoff {
+	if f.Rocon != "" && f.Rocoff != "" && f.Rocon == f.Rocoff {
 		return sameFile("ROC")
 	}
 	if (f.Ceron == "" && f.Ceroff != "") || (f.Ceron != "" && f.Ceroff == "") {
 		return missingFile("CER")
 	}
-	if f.Ceron == f.Ceroff {
+	if f.Ceron != "" && f.Ceroff != "" && f.Ceron == f.Ceroff {
 		return sameFile("CER")
 	}
 	if f.Empty() {

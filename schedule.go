@@ -163,7 +163,7 @@ func (s *Schedule) scheduleInsideCER(d delta, rs []*Entry) ([]*Entry, error) {
 		for i := 0; i < len(rs); i++ {
 			r := rs[i]
 			if isBetween(r.When, r.When.Add(d.Rocoff.Duration), cf.When) || isBetween(r.When, r.When.Add(d.Rocoff.Duration), cf.When.Add(d.CerAfter.Duration)) {
-				cf.When = r.When.Add(d.Rocoff.Duration + d.CerAfterRoc.Duration)
+				cf.When = r.When.Add(d.Rocoff.Duration + d.CerAfterRoc.Duration - d.CerAfter.Duration)
 				break
 			}
 		}
