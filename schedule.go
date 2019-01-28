@@ -156,15 +156,23 @@ func (s *Schedule) scheduleInsideCER(d delta, rs []*Entry) ([]*Entry, error) {
 			r := rs[i]
 			if isBetween(r.When, r.When.Add(d.Rocon.Duration), cn.When) || isBetween(r.When, r.When.Add(d.Rocon.Duration), cn.When.Add(d.CerBefore.Duration)) {
 				cn.When = r.When.Add(-d.CerBeforeRoc.Duration)
-				break
+				// break
 			}
 		}
 		cf := Entry{Label: CEROFF, When: p.Ends.Add(d.CerAfter.Duration)}
 		for i := 0; i < len(rs); i++ {
 			r := rs[i]
-			if isBetween(r.When, r.When.Add(d.Rocoff.Duration), cf.When) || isBetween(r.When, r.When.Add(d.Rocoff.Duration), cf.When.Add(d.CerAfter.Duration)) {
-				cf.When = r.When.Add(d.Rocoff.Duration + d.CerAfterRoc.Duration - d.CerAfter.Duration)
-				break
+
+			var dr time.Duration
+			switch r.Label {
+			case ROCOFF:
+				dr = d.Rocoff.Duration
+			case ROCON:
+				dr = d.Rocon.Duration
+			}
+			if isBetween(r.When, r.When.Add(dr), cf.When) || isBetween(r.When, r.When.Add(dr), cf.When.Add(d.CerAfter.Duration)) {
+				cf.When = r.When.Add(dr + d.CerAfterRoc.Duration)
+				// break
 			}
 		}
 		es = append(es, &cn, &cf)
