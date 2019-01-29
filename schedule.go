@@ -154,7 +154,14 @@ func (s *Schedule) scheduleInsideCER(d delta, rs []*Entry) ([]*Entry, error) {
 		cn := Entry{Label: CERON, When: p.Starts.Add(-d.CerBefore.Duration)}
 		for i := len(rs) - 1; i >= 0; i-- {
 			r := rs[i]
-			if isBetween(r.When, r.When.Add(d.Rocon.Duration), cn.When) || isBetween(r.When, r.When.Add(d.Rocon.Duration), cn.When.Add(d.CerBefore.Duration)) {
+			var dr time.Duration
+			switch r.Label {
+			case ROCOFF:
+				dr = d.Rocoff.Duration
+			case ROCON:
+				dr = d.Rocon.Duration
+			}
+			if isBetween(r.When, r.When.Add(dr), cn.When) || isBetween(r.When, r.When.Add(dr), cn.When.Add(d.Ceron.Duration)) {
 				cn.When = r.When.Add(-d.CerBeforeRoc.Duration)
 				// break
 			}
@@ -170,7 +177,7 @@ func (s *Schedule) scheduleInsideCER(d delta, rs []*Entry) ([]*Entry, error) {
 			case ROCON:
 				dr = d.Rocon.Duration
 			}
-			if isBetween(r.When, r.When.Add(dr), cf.When) || isBetween(r.When, r.When.Add(dr), cf.When.Add(d.CerAfter.Duration)) {
+			if isBetween(r.When, r.When.Add(dr), cf.When) || isBetween(r.When, r.When.Add(dr), cf.When.Add(d.Ceroff.Duration)) {
 				cf.When = r.When.Add(dr + d.CerAfterRoc.Duration)
 				// break
 			}
