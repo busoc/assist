@@ -15,8 +15,8 @@ import (
 const timeFormat = "2006-01-02T15:04:05.000000"
 
 const (
-	Version   = "1.1.0"
-	BuildTime = "2019-01-24 10:00:00"
+	Version   = "1.1.1"
+	BuildTime = "2019-01-30 10:05:00"
 	Program   = "assist"
 )
 
@@ -174,6 +174,12 @@ func main() {
 	for n, c := range ms {
 		log.Printf("%s scheduled: %d", n, c)
 	}
+	var t time.Duration
+
+	_, t = TimeROC(es, d)
+	log.Printf("MXGS-ROC total time: %s", t)
+	_, t = TimeCER(es, d)
+	log.Printf("MMIA-CER total time: %s", t)
 	log.Printf("md5 %s: %x", fs.Alliop, digest.Sum(nil))
 }
 
