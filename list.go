@@ -92,7 +92,7 @@ func ListEntries(s *Schedule, b time.Time, d delta, fs fileset, ignore bool) err
 func TimeROC(es []*Entry, d delta) (int, time.Duration) {
 	var (
 		i, p int
-		t time.Duration
+		t    time.Duration
 	)
 	for i < len(es) {
 		if es[i].Label != ROCON {
@@ -120,7 +120,7 @@ func TimeROC(es []*Entry, d delta) (int, time.Duration) {
 func TimeCER(es []*Entry, d delta) (int, time.Duration) {
 	var (
 		i, p int
-		t time.Duration
+		t    time.Duration
 	)
 	for i < len(es) {
 		if es[i].Label != CEROFF {
