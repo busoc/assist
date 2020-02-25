@@ -15,8 +15,8 @@ import (
 const timeFormat = "2006-01-02T15:04:05.000000"
 
 const (
-	Version   = "1.1.1"
-	BuildTime = "2019-01-30 10:05:00"
+	Version   = "1.1.2"
+	BuildTime = "2019-03-13 14:15:00"
 	Program   = "assist"
 )
 
@@ -138,9 +138,6 @@ func main() {
 	default:
 		Exit(checkError(err, nil))
 	}
-	if err := writeList(fs.Instrlist, fs.CanROC(), fs.CanCER()); err != nil {
-		Exit(err)
-	}
 	var es []*Entry
 	if files := flag.Args(); *ingest {
 		if len(files) <= 1 {
@@ -174,13 +171,15 @@ func main() {
 	for n, c := range ms {
 		log.Printf("%s scheduled: %d", n, c)
 	}
-	var t time.Duration
-
-	_, t = TimeROC(es, d)
-	log.Printf("MXGS-ROC total time: %s", t)
-	_, t = TimeCER(es, d)
-	log.Printf("MMIA-CER total time: %s", t)
+	_, tr := TimeROC(es, d)
+	log.Printf("MXGS-ROC total time: %s", tr)
+	_, tc := TimeCER(es, d)
+	log.Printf("MMIA-CER total time: %s", tc)
 	log.Printf("md5 %s: %x", fs.Alliop, digest.Sum(nil))
+
+	if err := writeList(fs.Instrlist, fs.CanROC() && tr > 0, fs.CanCER() && tc > 0); err != nil {
+		Exit(err)
+	}
 }
 
 func loadFromConfig(file string, d *delta, fs *fileset, ingest bool) (*Schedule, error) {
