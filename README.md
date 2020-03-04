@@ -2,7 +2,38 @@ The ASIM Semi Automatic Schedule Generator Tool has been developped to help oper
 to create command schedules in order to put instruments in a correct configuration
 for ISS day and SAA passes.
 
-Assist goal is to build the command text files necessary for the on-board daily schedule execution. This daily schedule ensures that science is maximized during the eclipse passes and that the instruments are in a correct configuration for eclipse and SAA passes.
+Assist goal is to build the command text files necessary for the on-board daily
+schedule execution. This daily schedule ensures that science is maximized during
+the eclipse passes and that the instruments are in a correct configuration for
+eclipse and SAA passes.
+
+# scheduling commands
+
+As state above, assist is used to schedule the commands execution on board. To
+perform this task, it uses different "algorithm" to schedule MXGS and MMIA. This
+section describes briefly how assist works for both of the instruments.
+
+## scheduling ROCON/ROCOFF (MXGS)
+
+MXGS should be put on at the beginning of each ISS night and off at the end of each
+of ISS night.
+
+Howver, assist should take into account crossing of SAA during the night. Indeed,
+when a SAA crossing is detected, another block of commands (AZM) should be executed
+before the ROCOON/ROCOFF. The corner cases are when the crossing of SAA occurs at
+the beginning or at the end of the ISS night.
+
+Another additional case taken into account is that assist can not schedule a
+ROCON/ROCOFF pair if the duration of the night is too short (this value is
+specified in the options)
+
+## scheduling CERON/CEROFF (MMIA)
+
+CERON are scheduled by assist before the first night where there is a SAA pass
+longer than a configured value.
+
+CEROFF are scheduled by assist before the first night where there is no SAA pass
+longer than a configured value.
 
 # assist input
 
