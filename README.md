@@ -68,7 +68,7 @@ Eclipse are: 0, off, false
 # usage
 
 ```
-$ assist [options] <trajectory>
+$ assist [options] <trajectory|configuration>
 
 where options are:
 
