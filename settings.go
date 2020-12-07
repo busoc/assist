@@ -10,6 +10,8 @@ const (
 	ROCOFF = "ROCOFF"
 	CERON  = "CERON"
 	CEROFF = "CEROFF"
+	ACSON  = "ACSON"
+	ACSOFF = "ACSOFF"
 )
 
 const (
@@ -21,6 +23,13 @@ var (
 	ExecutionTime   time.Time
 	DefaultBaseTime time.Time
 )
+
+type Rect struct {
+	North float64 `toml:"north"`
+	South float64 `toml:"south"`
+	West float64 `toml:"west"`
+	East float64  `toml:"east"`
+}
 
 func dumpSettings(d delta, fs fileset) {
 	log.Printf("%s-%s (build: %s)", Program, Version, BuildTime)
@@ -65,6 +74,9 @@ type delta struct {
 	CerAfter     Duration `toml:"cer-after"`
 	CerBeforeRoc Duration `toml:"cer-before-roc"`
 	CerAfterRoc  Duration `toml:"cer-after-roc"`
+
+	AcsNight Duration `toml:"acs-night"`
+	AcsTime  Duration `toml:"acs-duration"`
 }
 
 type fileset struct {
@@ -74,6 +86,8 @@ type fileset struct {
 	Rocoff string `toml:"rocoff"`
 	Ceron  string `toml:"ceron"`
 	Ceroff string `toml:"ceroff"`
+	Acson  string `toml:"acson"`
+	Acsoff  string `toml:"acsoff"`
 	Keep   bool   `toml:"-"`
 
 	Alliop    string `toml:"-"`
@@ -86,6 +100,10 @@ func (f fileset) CanROC() bool {
 
 func (f fileset) CanCER() bool {
 	return f.Ceron != "" && f.Ceroff != ""
+}
+
+func (f fileset) CanACS() bool {
+	return f.Acson != "" && f.Acsoff != ""
 }
 
 func (f fileset) Empty() bool {

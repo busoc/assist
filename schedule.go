@@ -47,6 +47,9 @@ type Schedule struct {
 	Ignore   bool
 	Eclipses []*Period
 	Saas     []*Period
+
+	North Rect
+	South Rect
 }
 
 func Open(p string, d time.Duration) (*Schedule, error) {
@@ -100,7 +103,7 @@ func (s *Schedule) Periods() []*Period {
 	return es
 }
 
-func (s *Schedule) Schedule(d delta, roc, cer bool) ([]*Entry, error) {
+func (s *Schedule) Schedule(d delta, roc, cer, acs bool) ([]*Entry, error) {
 	if !roc && !cer {
 		return nil, nil
 	}
@@ -127,8 +130,27 @@ func (s *Schedule) Schedule(d delta, roc, cer bool) ([]*Entry, error) {
 		}
 	default:
 	}
+	if acs {
+		if vs, err := s.scheduleACS(d, es); err != nil {
+			return nil, err
+		} else {
+			es = append(es, vs...)
+		}
+	}
 	sort.Slice(es, func(i, j int) bool { return es[i].When.Before(es[j].When) })
 	return es, nil
+}
+
+func (s *Schedule) scheduleACS(d delta, rs []*Entry) ([]*Entry, error) {
+	min := d.AcsTime.Duration + 2*d.AcsTime.Duration
+	for _, p := range s.Eclipses {
+		// check that Eclipse has the minimum expected duration
+		if p.Duration() < min {
+			continue
+		}
+		fmt.Println("acs", p.Starts, p.Ends)
+	}
+	return nil, nil
 }
 
 func (s *Schedule) scheduleInsideCER(d delta, rs []*Entry) ([]*Entry, error) {

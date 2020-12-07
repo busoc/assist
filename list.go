@@ -35,11 +35,11 @@ func ListPeriods(s *Schedule, b time.Time) error {
 
 func ListEntries(s *Schedule, b time.Time, d delta, fs fileset, ignore bool) error {
 	s.Ignore = ignore
-	canROC, canCER := fs.CanROC(), fs.CanCER()
-	if !canROC && !canCER {
-		canROC, canCER = true, true
+	canROC, canCER, canACS := fs.CanROC(), fs.CanCER(), fs.CanACS()
+	if !canROC && !canCER && !canACS {
+		canROC, canCER, canACS = true, true, true
 	}
-	es, err := s.Filter(b).Schedule(d, canROC, canCER)
+	es, err := s.Filter(b).Schedule(d, canROC, canCER, canACS)
 	if err != nil {
 		return err
 	}

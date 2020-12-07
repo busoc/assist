@@ -148,7 +148,7 @@ func main() {
 		}
 		es, err = ingestFiles(files, b)
 	} else {
-		es, err = s.Filter(b).Schedule(d, fs.CanROC(), fs.CanCER())
+		es, err = s.Filter(b).Schedule(d, fs.CanROC(), fs.CanCER(), fs.CanACS())
 	}
 	if err != nil {
 		Exit(checkError(err, nil))
@@ -197,21 +197,33 @@ func loadFromConfig(file string, d *delta, fs *fileset, ingest bool) (*Schedule,
 		Instr   string `toml:"instrlist"`
 		Comment bool   `toml:"keep-comment"`
 
+		Box struct {
+			North Rect
+			South Rect
+		} `toml:"acs"`
+
 		Delta    *delta   `toml:"delta"`
 		Commands *fileset `toml:"commands"`
 	}{
 		Delta:    d,
 		Commands: fs,
 	}
-	if err := toml.NewDecoder(r).Decode(&c); err != nil {
+	if err := toml.Decode(r, &c); err != nil {
 		return nil, badUsage(fmt.Sprintf("invalid configuration file: %v", err))
 	}
 	fs.Path, fs.Alliop, fs.Instrlist, fs.Keep = c.Trajectory, c.Alliop, c.Instr, c.Comment
 	if ingest {
 		return nil, nil
 	}
+	var sch *Schedule
 	if c.Trajectory != "" {
-		return Open(c.Trajectory, c.Resolution.Duration)
+		sch, err = Open(c.Trajectory, c.Resolution.Duration)
+	} else {
+		sch, err = OpenReader(os.Stdin, c.Resolution.Duration)
 	}
-	return OpenReader(os.Stdin, c.Resolution.Duration)
+	if err == nil {
+		sch.North = c.Box.North
+		sch.South = c.Box.South
+	}
+	return sch, err
 }
