@@ -7,6 +7,25 @@ import (
 	"time"
 )
 
+var DefaultDelta = delta{
+	Rocon:  Duration{time.Second * 50},
+	Rocoff: Duration{time.Second * 80},
+	Ceron:  Duration{time.Second * 40},
+	Ceroff: Duration{time.Second * 40},
+	Margin: Duration{time.Second * 120},
+	// Cer:          Duration{time.Second * 300},
+	Cer:          Duration{0},
+	Intersect:    Duration{DefaultIntersectTime},
+	AZM:          Duration{time.Second * 40},
+	Saa:          Duration{time.Second * 10},
+	CerBefore:    Duration{time.Second * 50},
+	CerAfter:     Duration{time.Second * 15},
+	CerBeforeRoc: Duration{time.Second * 45},
+	CerAfterRoc:  Duration{time.Second * 10},
+	AcsNight:     Duration{time.Second * 180},
+	AcsTime:      Duration{time.Second * 5},
+}
+
 const (
 	ROCON  = "ROCON"
 	ROCOFF = "ROCOFF"

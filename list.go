@@ -5,9 +5,7 @@ import (
 	"time"
 )
 
-func ListPeriods(s *Schedule, b time.Time) error {
-	s = s.Filter(b)
-
+func ListPeriods(s *Schedule) error {
 	var (
 		ed, ad, xd time.Duration
 		ec, ac, xc int
@@ -38,13 +36,13 @@ func ListPeriods(s *Schedule, b time.Time) error {
 	return nil
 }
 
-func ListEntries(s *Schedule, b time.Time, d delta, fs fileset, ignore bool) error {
+func ListEntries(s *Schedule, d delta, fs fileset, ignore bool) error {
 	s.Ignore = ignore
 	canROC, canCER, canACS := fs.CanROC(), fs.CanCER(), fs.CanACS()
 	if !canROC && !canCER && !canACS {
 		canROC, canCER, canACS = true, true, true
 	}
-	es, err := s.Filter(b).Schedule(d, canROC, canCER, canACS)
+	es, err := s.Schedule(d, canROC, canCER, canACS)
 	if err != nil {
 		return err
 	}
