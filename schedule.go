@@ -63,15 +63,8 @@ func Open(p string, d time.Duration, area Shape) (*Schedule, error) {
 }
 
 func OpenReader(r io.Reader, d time.Duration, area Shape) (*Schedule, error) {
-	var (
-		s   Schedule
-		err error
-	)
-	s.Eclipses, s.Saas, s.Auroras, err = listPeriods(r, d, area)
-	if err != nil {
-		return nil, err
-	}
-	return &s, nil
+	var s Schedule
+	return &s, s.listPeriods(r, d, area)
 }
 
 func (s *Schedule) Filter(t time.Time) *Schedule {
@@ -112,12 +105,7 @@ func (s *Schedule) Periods() []*Period {
 	es = append(es, s.Eclipses...)
 	es = append(es, s.Saas...)
 	es = append(es, s.Auroras...)
-	// for i := 0; i < len(s.Eclipses); i++ {
-	// 	es[i] = s.Eclipses[i]
-	// }
-	// for i := len(s.Eclipses); i < len(es); i++ {
-	// 	es[i] = s.Saas[i-len(s.Eclipses)]
-	// }
+
 	sort.Slice(es, func(i, j int) bool { return es[i].Starts.Before(es[j].Starts) })
 	return es
 }
@@ -399,46 +387,39 @@ func isBetween(f, t, d time.Time) bool {
 	return f.Before(t) && (f.Equal(d) || t.Equal(d) || f.Before(d) && t.After(d))
 }
 
-func listPeriods(r io.Reader, resolution time.Duration, area Shape) ([]*Period, []*Period, []*Period, error) {
+func (s *Schedule) listPeriods(r io.Reader, resolution time.Duration, area Shape) error {
 	rs := csv.NewReader(r)
 	rs.Comment = PredictComment
 	rs.Comma = PredictComma
 	rs.FieldsPerRecord = PredictColumns
 
 	if r, err := rs.Read(); r == nil && err != nil {
-		return nil, nil, nil, err
+		return err
 	}
 
-	var (
-		e, a, x, z Period
-		es, as, xs []*Period
-	)
+	var e, a, x, z Period
 	for i := 0; ; i++ {
 		r, err := rs.Read()
 		if r == nil && err == io.EOF {
 			break
 		}
 		if err != nil {
-			return nil, nil, nil, badUsage(err.Error())
+			return badUsage(err.Error())
 		}
-		lat, err := strconv.ParseFloat(r[PredictLatIndex], 64)
+		lat, lng, err := parseLatLng(r, i)
 		if err != nil {
-			return nil, nil, nil, floatBadSyntax(i, r[PredictLatIndex])
-		}
-		lng, err := strconv.ParseFloat(r[PredictLonIndex], 64)
-		if err != nil {
-			return nil, nil, nil, floatBadSyntax(i, r[PredictLonIndex])
+			return err
 		}
 		if area.Contains(lat, lng) && isEnterPeriod(r[PredictEclipseIndex]) && x.IsZero() {
 			if x.Starts, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
-				return nil, nil, nil, timeBadSyntax(i, r[PredictTimeIndex])
+				return timeBadSyntax(i, r[PredictTimeIndex])
 			}
 		}
 		if (!area.Contains(lat, lng) || isLeavePeriod(r[PredictEclipseIndex])) && !x.IsZero() {
 			if x.Ends, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
-				return nil, nil, nil, timeBadSyntax(i, r[PredictTimeIndex])
+				return timeBadSyntax(i, r[PredictTimeIndex])
 			}
-			xs = append(xs, &Period{
+			s.Auroras = append(s.Auroras, &Period{
 				Label:  "aurora",
 				Starts: x.Starts.UTC(),
 				Ends:   x.Ends.Add(-resolution).UTC(),
@@ -447,14 +428,14 @@ func listPeriods(r io.Reader, resolution time.Duration, area Shape) ([]*Period, 
 		}
 		if isEnterPeriod(r[PredictEclipseIndex]) && e.IsZero() {
 			if e.Starts, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
-				return nil, nil, nil, timeBadSyntax(i, r[PredictTimeIndex])
+				return timeBadSyntax(i, r[PredictTimeIndex])
 			}
 		}
 		if isLeavePeriod(r[PredictEclipseIndex]) && !e.IsZero() {
 			if e.Ends, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
-				return nil, nil, nil, timeBadSyntax(i, r[PredictTimeIndex])
+				return timeBadSyntax(i, r[PredictTimeIndex])
 			}
-			es = append(es, &Period{
+			s.Eclipses = append(s.Eclipses, &Period{
 				Label:  "eclipse",
 				Starts: e.Starts.UTC(),
 				Ends:   e.Ends.Add(-resolution).UTC(),
@@ -463,14 +444,14 @@ func listPeriods(r io.Reader, resolution time.Duration, area Shape) ([]*Period, 
 		}
 		if isEnterPeriod(r[PredictSaaIndex]) && a.IsZero() {
 			if a.Starts, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
-				return nil, nil, nil, timeBadSyntax(i, r[PredictTimeIndex])
+				return timeBadSyntax(i, r[PredictTimeIndex])
 			}
 		}
 		if isLeavePeriod(r[PredictSaaIndex]) && !a.IsZero() {
 			if a.Ends, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
-				return nil, nil, nil, timeBadSyntax(i, r[PredictTimeIndex])
+				return timeBadSyntax(i, r[PredictTimeIndex])
 			}
-			as = append(as, &Period{
+			s.Saas = append(s.Saas, &Period{
 				Label:  "saa",
 				Starts: a.Starts.UTC(),
 				Ends:   a.Ends.Add(-resolution).UTC(),
@@ -478,13 +459,25 @@ func listPeriods(r io.Reader, resolution time.Duration, area Shape) ([]*Period, 
 			a = z
 		}
 	}
-	if len(es) == 0 && len(as) == 0 {
-		return nil, nil, nil, fmt.Errorf("no eclipses/saas found")
+	if len(s.Eclipses) == 0 && len(s.Saas) == 0 {
+		return fmt.Errorf("no eclipses/saas found")
 	}
-	sort.Slice(es, func(i, j int) bool { return es[i].Starts.Before(es[j].Starts) })
-	sort.Slice(as, func(i, j int) bool { return as[i].Starts.Before(as[j].Starts) })
-	sort.Slice(xs, func(i, j int) bool { return xs[i].Starts.Before(xs[j].Starts) })
-	return es, as, xs, nil
+	sort.Slice(s.Eclipses, func(i, j int) bool { return s.Eclipses[i].Starts.Before(s.Eclipses[j].Starts) })
+	sort.Slice(s.Saas, func(i, j int) bool { return s.Saas[i].Starts.Before(s.Saas[j].Starts) })
+	sort.Slice(s.Auroras, func(i, j int) bool { return s.Auroras[i].Starts.Before(s.Auroras[j].Starts) })
+	return nil
+}
+
+func parseLatLng(r []string, i int) (float64, float64, error) {
+	lat, err := strconv.ParseFloat(r[PredictLatIndex], 64)
+	if err != nil {
+		return 0, 0, floatBadSyntax(i, r[PredictLatIndex])
+	}
+	lng, err := strconv.ParseFloat(r[PredictLonIndex], 64)
+	if err != nil {
+		return 0, 0, floatBadSyntax(i, r[PredictLonIndex])
+	}
+	return lat, lng, err
 }
 
 func isEnterPeriod(r string) bool {
