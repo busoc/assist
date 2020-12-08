@@ -16,7 +16,7 @@ const timeFormat = "2006-01-02T15:04:05.000000"
 
 const (
 	Version   = "1.2.0"
-	BuildTime = "2020-12-07 10:00:00"
+	BuildTime = "2020-12-08 10:45:00"
 	Program   = "assist"
 )
 
@@ -50,6 +50,8 @@ func main() {
 		CerAfter:     Duration{time.Second * 15},
 		CerBeforeRoc: Duration{time.Second * 45},
 		CerAfterRoc:  Duration{time.Second * 10},
+		AcsNight:     Duration{time.Second * 180},
+		AcsTime:      Duration{time.Second * 5},
 	}
 	flag.Var(&d.Rocon, "rocon-time", "ROCON execution time")
 	flag.Var(&d.Rocoff, "rocoff-time", "ROCOFF execution time")
@@ -65,10 +67,14 @@ func main() {
 	flag.Var(&d.AZM, "azm", "default AZM duration")
 	flag.Var(&d.Margin, "roc-margin", "ROC margin")
 	flag.Var(&d.Saa, "saa", "default SAA duration")
+	flag.Var(&d.AcsTime, "acs-time", "execution time for ACS command")
+	flag.Var(&d.AcsNight, "acs-night", "minimum time of night during aurora traversal")
 	flag.StringVar(&fs.Rocon, "rocon-file", "", "mxgs rocon command file")
 	flag.StringVar(&fs.Rocoff, "rocoff-file", "", "mxgs rocoff command file")
 	flag.StringVar(&fs.Ceron, "ceron-file", "", "mmia ceron command file")
 	flag.StringVar(&fs.Ceroff, "ceroff-file", "", "mmia ceroff command file")
+	flag.StringVar(&fs.Acson, "acson-file", "", "asim acson command file")
+	flag.StringVar(&fs.Acsoff, "acsoff-file", "", "asim acsoff command file")
 	flag.BoolVar(&fs.Keep, "keep-comment", false, "keep comment from command file")
 	flag.StringVar(&fs.Alliop, "alliop", "", "alliop file")
 	flag.StringVar(&fs.Instrlist, "instrlist", "", "instrlist file")
@@ -100,12 +106,12 @@ func main() {
 	} else {
 		switch flag.NArg() {
 		default:
-			s, err = Open(flag.Arg(0), *resolution)
+			s, err = Open(flag.Arg(0), *resolution, NewArea())
 			if err == nil {
 				fs.Path = flag.Arg(0)
 			}
 		case 0:
-			s, err = OpenReader(os.Stdin, *resolution)
+			s, err = OpenReader(os.Stdin, *resolution, NewArea())
 		}
 	}
 	if err != nil {
@@ -126,8 +132,10 @@ func main() {
 	}
 	dumpSettings(d, fs)
 
-	var w io.Writer
-	digest := md5.New()
+	var (
+		w      io.Writer
+		digest = md5.New()
+	)
 	switch f, err := os.Create(fs.Alliop); {
 	case err == nil:
 		w = io.MultiWriter(f, digest)
@@ -175,6 +183,8 @@ func main() {
 	log.Printf("MXGS-ROC total time: %s", tr)
 	_, tc := TimeCER(es, d)
 	log.Printf("MMIA-CER total time: %s", tc)
+	_, ta := TimeACS(es, d)
+	log.Printf("ASIM-ACS total time: %s", ta)
 	log.Printf("md5 %s: %x", fs.Alliop, digest.Sum(nil))
 
 	if err := writeList(fs.Instrlist, fs.CanROC() && tr > 0, fs.CanCER() && tc > 0); err != nil {
@@ -197,10 +207,9 @@ func loadFromConfig(file string, d *delta, fs *fileset, ingest bool) (*Schedule,
 		Instr   string `toml:"instrlist"`
 		Comment bool   `toml:"keep-comment"`
 
-		Box struct {
-			North Rect
-			South Rect
-		} `toml:"acs"`
+		Area struct {
+			Boxes []Rect `toml:"boxes"`
+		} `toml:"area"`
 
 		Delta    *delta   `toml:"delta"`
 		Commands *fileset `toml:"commands"`
@@ -215,15 +224,13 @@ func loadFromConfig(file string, d *delta, fs *fileset, ingest bool) (*Schedule,
 	if ingest {
 		return nil, nil
 	}
-	var sch *Schedule
+	cs := make([]Shape, 0, len(c.Area.Boxes))
+	for _, r := range c.Area.Boxes {
+		cs = append(cs, r)
+	}
+	area := NewArea(cs...)
 	if c.Trajectory != "" {
-		sch, err = Open(c.Trajectory, c.Resolution.Duration)
-	} else {
-		sch, err = OpenReader(os.Stdin, c.Resolution.Duration)
+		return Open(c.Trajectory, c.Resolution.Duration, area)
 	}
-	if err == nil {
-		sch.North = c.Box.North
-		sch.South = c.Box.South
-	}
-	return sch, err
+	return OpenReader(os.Stdin, c.Resolution.Duration, area)
 }

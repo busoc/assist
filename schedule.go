@@ -6,11 +6,14 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strconv"
 	"time"
 )
 
 const (
 	PredictTimeIndex    = 0
+	PredictLatIndex     = 3
+	PredictLonIndex     = 4
 	PredictEclipseIndex = 5
 	PredictSaaIndex     = 6
 	PredictColumns      = 8
@@ -47,26 +50,24 @@ type Schedule struct {
 	Ignore   bool
 	Eclipses []*Period
 	Saas     []*Period
-
-	North Rect
-	South Rect
+	Auroras  []*Period
 }
 
-func Open(p string, d time.Duration) (*Schedule, error) {
+func Open(p string, d time.Duration, area Shape) (*Schedule, error) {
 	r, err := os.Open(p)
 	if err != nil {
 		return nil, checkError(err, nil)
 	}
 	defer r.Close()
-	return OpenReader(r, d)
+	return OpenReader(r, d, area)
 }
 
-func OpenReader(r io.Reader, d time.Duration) (*Schedule, error) {
+func OpenReader(r io.Reader, d time.Duration, area Shape) (*Schedule, error) {
 	var (
 		s   Schedule
 		err error
 	)
-	s.Eclipses, s.Saas, err = listPeriods(r, d)
+	s.Eclipses, s.Saas, s.Auroras, err = listPeriods(r, d, area)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +78,11 @@ func (s *Schedule) Filter(t time.Time) *Schedule {
 	if t.IsZero() {
 		return s
 	}
-	es, as := make([]*Period, 0, len(s.Eclipses)), make([]*Period, 0, len(s.Saas))
+	var (
+		es = make([]*Period, 0, len(s.Eclipses))
+		as = make([]*Period, 0, len(s.Saas))
+		xs = make([]*Period, 0, len(s.Auroras))
+	)
 	for _, e := range s.Eclipses {
 		if e.Starts.After(t) {
 			es = append(es, e)
@@ -88,17 +93,31 @@ func (s *Schedule) Filter(t time.Time) *Schedule {
 			as = append(as, a)
 		}
 	}
-	return &Schedule{Ignore: s.Ignore, Eclipses: es, Saas: as}
+	for _, a := range s.Auroras {
+		if a.Starts.After(t) {
+			xs = append(xs, a)
+		}
+	}
+	c := Schedule{
+		Ignore:   s.Ignore,
+		Eclipses: es,
+		Saas:     as,
+		Auroras:  xs,
+	}
+	return &c
 }
 
 func (s *Schedule) Periods() []*Period {
-	es := make([]*Period, len(s.Eclipses)+len(s.Saas))
-	for i := 0; i < len(s.Eclipses); i++ {
-		es[i] = s.Eclipses[i]
-	}
-	for i := len(s.Eclipses); i < len(es); i++ {
-		es[i] = s.Saas[i-len(s.Eclipses)]
-	}
+	es := make([]*Period, 0, len(s.Eclipses)+len(s.Saas)+len(s.Auroras))
+	es = append(es, s.Eclipses...)
+	es = append(es, s.Saas...)
+	es = append(es, s.Auroras...)
+	// for i := 0; i < len(s.Eclipses); i++ {
+	// 	es[i] = s.Eclipses[i]
+	// }
+	// for i := len(s.Eclipses); i < len(es); i++ {
+	// 	es[i] = s.Saas[i-len(s.Eclipses)]
+	// }
 	sort.Slice(es, func(i, j int) bool { return es[i].Starts.Before(es[j].Starts) })
 	return es
 }
@@ -142,15 +161,61 @@ func (s *Schedule) Schedule(d delta, roc, cer, acs bool) ([]*Entry, error) {
 }
 
 func (s *Schedule) scheduleACS(d delta, rs []*Entry) ([]*Entry, error) {
-	min := d.AcsTime.Duration + 2*d.AcsTime.Duration
-	for _, p := range s.Eclipses {
+	var (
+		min = d.AcsNight.Duration + 2*d.AcsTime.Duration
+		es  = make([]*Entry, 0, len(rs))
+	)
+	for _, p := range s.Auroras {
 		// check that Eclipse has the minimum expected duration
 		if p.Duration() < min {
 			continue
 		}
-		fmt.Println("acs", p.Starts, p.Ends)
+		es = append(es, s.scheduleACSON(p, rs, d))
+		if off := s.scheduleACSOFF(p, s.Eclipses, d); off != nil {
+			es = append(es, off)
+		}
 	}
-	return nil, nil
+	return es, nil
+}
+
+func (s *Schedule) scheduleACSOFF(p *Period, rs []*Period, d delta) *Entry {
+	other := isCrossing(p, rs, func(curr, other *Period) bool {
+		return !other.Ends.Before(curr.Ends.Add(-d.AcsTime.Duration))
+	})
+	e := Entry{Label: ACSOFF}
+	if other == nil {
+		e.When = p.Ends
+		return &e
+	}
+	if p.Ends.Add(d.AcsTime.Duration).Before(other.Ends) {
+		e.When = p.Ends.Add(-d.AcsTime.Duration)
+		return &e
+	}
+	return nil
+}
+
+func (s *Schedule) scheduleACSON(p *Period, rs []*Entry, d delta) *Entry {
+	var (
+		min    = d.AcsNight.Duration + 2*d.AcsTime.Duration
+		starts = p.Starts.Add(-min)
+		ends   = p.Starts.Add(min)
+	)
+	// schedule ACSON: try to find the nearset ROCON in its execution time
+	// if no ROCON is found, ACSON can be scheduled at beginning of period
+	// otherwise, ACSON should be scheduled at end of ROCON
+	rocon := isNear(p, rs, func(e *Entry) bool {
+		if e.Label != ROCON {
+			return false
+		}
+		return e.When.After(starts) && e.When.Before(ends)
+	})
+	e := Entry{Label: ACSON}
+	if rocon == nil {
+		e.When = p.Starts
+	} else {
+		e.When = e.When.Add(d.Rocon.Duration)
+	}
+	return &e
 }
 
 func (s *Schedule) scheduleInsideCER(d delta, rs []*Entry) ([]*Entry, error) {
@@ -334,19 +399,19 @@ func isBetween(f, t, d time.Time) bool {
 	return f.Before(t) && (f.Equal(d) || t.Equal(d) || f.Before(d) && t.After(d))
 }
 
-func listPeriods(r io.Reader, resolution time.Duration) ([]*Period, []*Period, error) {
+func listPeriods(r io.Reader, resolution time.Duration, area Shape) ([]*Period, []*Period, []*Period, error) {
 	rs := csv.NewReader(r)
 	rs.Comment = PredictComment
 	rs.Comma = PredictComma
 	rs.FieldsPerRecord = PredictColumns
 
 	if r, err := rs.Read(); r == nil && err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	var (
-		e, a, z Period
-		es, as  []*Period
+		e, a, x, z Period
+		es, as, xs []*Period
 	)
 	for i := 0; ; i++ {
 		r, err := rs.Read()
@@ -354,16 +419,40 @@ func listPeriods(r io.Reader, resolution time.Duration) ([]*Period, []*Period, e
 			break
 		}
 		if err != nil {
-			return nil, nil, badUsage(err.Error())
+			return nil, nil, nil, badUsage(err.Error())
+		}
+		lat, err := strconv.ParseFloat(r[PredictLatIndex], 64)
+		if err != nil {
+			return nil, nil, nil, floatBadSyntax(i, r[PredictLatIndex])
+		}
+		lng, err := strconv.ParseFloat(r[PredictLonIndex], 64)
+		if err != nil {
+			return nil, nil, nil, floatBadSyntax(i, r[PredictLonIndex])
+		}
+		if area.Contains(lat, lng) && isEnterPeriod(r[PredictEclipseIndex]) && x.IsZero() {
+			if x.Starts, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
+				return nil, nil, nil, timeBadSyntax(i, r[PredictTimeIndex])
+			}
+		}
+		if (!area.Contains(lat, lng) || isLeavePeriod(r[PredictEclipseIndex])) && !x.IsZero() {
+			if x.Ends, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
+				return nil, nil, nil, timeBadSyntax(i, r[PredictTimeIndex])
+			}
+			xs = append(xs, &Period{
+				Label:  "aurora",
+				Starts: x.Starts.UTC(),
+				Ends:   x.Ends.Add(-resolution).UTC(),
+			})
+			x = z
 		}
 		if isEnterPeriod(r[PredictEclipseIndex]) && e.IsZero() {
 			if e.Starts, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
-				return nil, nil, timeBadSyntax(i, r[PredictTimeIndex])
+				return nil, nil, nil, timeBadSyntax(i, r[PredictTimeIndex])
 			}
 		}
 		if isLeavePeriod(r[PredictEclipseIndex]) && !e.IsZero() {
 			if e.Ends, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
-				return nil, nil, timeBadSyntax(i, r[PredictTimeIndex])
+				return nil, nil, nil, timeBadSyntax(i, r[PredictTimeIndex])
 			}
 			es = append(es, &Period{
 				Label:  "eclipse",
@@ -374,12 +463,12 @@ func listPeriods(r io.Reader, resolution time.Duration) ([]*Period, []*Period, e
 		}
 		if isEnterPeriod(r[PredictSaaIndex]) && a.IsZero() {
 			if a.Starts, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
-				return nil, nil, timeBadSyntax(i, r[PredictTimeIndex])
+				return nil, nil, nil, timeBadSyntax(i, r[PredictTimeIndex])
 			}
 		}
 		if isLeavePeriod(r[PredictSaaIndex]) && !a.IsZero() {
 			if a.Ends, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
-				return nil, nil, timeBadSyntax(i, r[PredictTimeIndex])
+				return nil, nil, nil, timeBadSyntax(i, r[PredictTimeIndex])
 			}
 			as = append(as, &Period{
 				Label:  "saa",
@@ -390,11 +479,12 @@ func listPeriods(r io.Reader, resolution time.Duration) ([]*Period, []*Period, e
 		}
 	}
 	if len(es) == 0 && len(as) == 0 {
-		return nil, nil, fmt.Errorf("no eclipses/saas found")
+		return nil, nil, nil, fmt.Errorf("no eclipses/saas found")
 	}
 	sort.Slice(es, func(i, j int) bool { return es[i].Starts.Before(es[j].Starts) })
 	sort.Slice(as, func(i, j int) bool { return as[i].Starts.Before(as[j].Starts) })
-	return es, as, nil
+	sort.Slice(xs, func(i, j int) bool { return xs[i].Starts.Before(xs[j].Starts) })
+	return es, as, xs, nil
 }
 
 func isEnterPeriod(r string) bool {
@@ -420,10 +510,19 @@ func skipEclipses(es, as []*Period, cross bool, d time.Duration) []*Period {
 	return nil
 }
 
-func isCrossingList(e *Period, as []*Period, predicate func(*Period, *Period) bool) []*Period {
-	if len(as) == 0 {
-		return nil
+func isNear(a *Period, es []*Entry, predicate func(*Entry) bool) *Entry {
+	for _, e := range es {
+		if predicate(e) {
+			return e
+		}
+		if e.When.After(a.Ends) {
+			break
+		}
 	}
+	return nil
+}
+
+func isCrossingList(e *Period, as []*Period, predicate func(*Period, *Period) bool) []*Period {
 	var es []*Period
 	for _, a := range as {
 		if predicate(e, a) {

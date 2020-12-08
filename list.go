@@ -9,8 +9,8 @@ func ListPeriods(s *Schedule, b time.Time) error {
 	s = s.Filter(b)
 
 	var (
-		ed, ad time.Duration
-		ec, ac int
+		ed, ad, xd time.Duration
+		ec, ac, xc int
 	)
 	for i, p := range s.Periods() {
 		d := p.Duration()
@@ -23,12 +23,17 @@ func ListPeriods(s *Schedule, b time.Time) error {
 		case "eclipse":
 			ed += d
 			ec++
+		case "aurora":
+			xd += d
+			xc++
 		}
 	}
 	fmt.Println()
 	fmt.Printf("eclipse total time: %s (%d)", ed, ec)
 	fmt.Println()
 	fmt.Printf("saa total time: %s (%d)", ad, ac)
+	fmt.Println()
+	fmt.Printf("aurora total time: %s (%d)", xd, xc)
 	fmt.Println()
 	return nil
 }
@@ -63,6 +68,8 @@ func ListEntries(s *Schedule, b time.Time, d delta, fs fileset, ignore bool) err
 			to = e.When.Add(d.Ceron.Duration)
 		case CEROFF:
 			to = e.When.Add(d.Ceroff.Duration)
+		case ACSON, ACSOFF:
+			to = e.When.Add(d.AcsTime.Duration)
 		}
 		conflict := "-"
 		if e.Warning {
@@ -82,11 +89,31 @@ func ListEntries(s *Schedule, b time.Time, d delta, fs fileset, ignore bool) err
 	fmt.Printf("MXGS-ROC total time: %s (%d)", t, p)
 	fmt.Println()
 
+	p, t = TimeACS(es, d)
+	fmt.Printf("MXGS-ACS total time: %s (%d)", t, p)
+	fmt.Println()
+
 	p, t = TimeCER(es, d)
 	fmt.Printf("MMIA-CER total time: %s (%d)", t, p)
 	fmt.Println()
 
 	return nil
+}
+
+func TimeACS(es []*Entry, d delta) (int, time.Duration) {
+	var (
+		i, p int
+		t    time.Duration
+	)
+	for i < len(es) {
+		i++
+		if es[i-1].Label != ACSON && es[i-1].Label != ACSOFF {
+			continue
+		}
+		p++
+		t += d.AcsTime.Duration
+	}
+	return p, t
 }
 
 func TimeROC(es []*Entry, d delta) (int, time.Duration) {

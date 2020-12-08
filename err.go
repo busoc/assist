@@ -67,6 +67,14 @@ func badUsage(n string) error {
 	return &e
 }
 
+func floatBadSyntax(i int, v string) error {
+	e := Error{
+		Cause: fmt.Errorf("number badly formatted at row %d (%s)", i+1, v),
+		Code:  EINVAL,
+	}
+	return &e
+}
+
 func timeBadSyntax(i int, v string) error {
 	e := Error{
 		Cause: fmt.Errorf("time badly formatted at row %d (%s)", i+1, v),

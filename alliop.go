@@ -75,6 +75,18 @@ func writeSchedule(w io.Writer, es []*Entry, when time.Time, fs fileset) (map[st
 			}
 			ms[e.Label]++
 			cid, delta, err = prepareCommand(w, fs.Ceroff, cid, e.When, delta, fs.Keep)
+		case ACSON:
+			if !fs.CanACS() {
+				return nil, missingFile("ACS")
+			}
+			ms[e.Label]++
+			cid, delta, err = prepareCommand(w, fs.Acson, cid, e.When, delta, fs.Keep)
+		case ACSOFF:
+			if !fs.CanACS() {
+				return nil, missingFile("ACS")
+			}
+			ms[e.Label]++
+			cid, delta, err = prepareCommand(w, fs.Acsoff, cid, e.When, delta, fs.Keep)
 		}
 		if err != nil {
 			return nil, err
@@ -99,7 +111,7 @@ func writePreamble(w io.Writer, when time.Time) {
 }
 
 func writeMetadata(w io.Writer, fs fileset) error {
-	for _, f := range []string{fs.Path, fs.Rocon, fs.Rocoff, fs.Ceron, fs.Ceroff} {
+	for _, f := range []string{fs.Path, fs.Rocon, fs.Rocoff, fs.Ceron, fs.Ceroff, fs.Acson, fs.Acsoff} {
 		if f == "" {
 			continue
 		}

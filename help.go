@@ -91,10 +91,14 @@ Options:
   -cer-after-roc  TIME  delay CEROFF after ROC when conflict
   -azm            TIME  AZM duration
   -saa            TIME  SAA duration
+  -acs-time       TIME  ACS expected execution time
+  -acs-night      TIME  ACS minimum night duration
   -rocon-file     FILE  use FILE with commands for ROCON
   -rocoff-file    FILE  use FILE with commands for ROCOFF
   -ceron-file     FILE  use FILE with commands for CERON
   -ceroff-file    FILE  use FILE with commands for CEROFF
+  -acson-file     FILE  use FILE with commands for ACSON
+  -acsoff-file    FILE  use FILE with commands for ACSOFF
   -resolution     TIME  TIME interval between two rows in the trajectory
   -base-time      DATE
   -alliop         FILE  save schedule to FILE

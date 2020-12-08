@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -24,11 +26,77 @@ var (
 	DefaultBaseTime time.Time
 )
 
+type Shape interface {
+	IsZero() bool
+	Contains(float64, float64) bool
+	fmt.Stringer
+}
+
 type Rect struct {
 	North float64 `toml:"north"`
 	South float64 `toml:"south"`
-	West float64 `toml:"west"`
-	East float64  `toml:"east"`
+	West  float64 `toml:"west"`
+	East  float64 `toml:"east"`
+}
+
+func (r Rect) String() string {
+	return fmt.Sprintf("%.0fN %.0fS %.0fW %.0fE", r.North, r.South, r.East, r.West)
+}
+
+func (r Rect) IsZero() bool {
+	return r.North == r.South || r.West == r.East
+}
+
+func (r Rect) Contains(lat, lng float64) bool {
+	if r.IsZero() || !r.isValid() {
+		return false
+	}
+	return lat <= r.North && lat >= r.South && lng <= r.East && lng >= r.West
+}
+
+func (r Rect) isValid() bool {
+	return r.South < r.North && r.West < r.East
+}
+
+type Area struct {
+	shapes []Shape
+}
+
+func NewArea(as ...Shape) Shape {
+	return Area{
+		shapes: append([]Shape{}, as...),
+	}
+}
+
+func (a Area) String() string {
+	var b strings.Builder
+	for i, s := range a.shapes {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		b.WriteString("(")
+		b.WriteString(s.String())
+		b.WriteString(")")
+	}
+	return b.String()
+}
+
+func (a Area) IsZero() bool {
+	for _, s := range a.shapes {
+		if !s.IsZero() {
+			return false
+		}
+	}
+	return true
+}
+
+func (a Area) Contains(lat, lng float64) bool {
+	for _, s := range a.shapes {
+		if s.Contains(lat, lng) {
+			return true
+		}
+	}
+	return false
 }
 
 func dumpSettings(d delta, fs fileset) {
@@ -40,6 +108,8 @@ func dumpSettings(d delta, fs fileset) {
 	log.Printf("settings: CERON time: %s", d.Ceron.Duration)
 	log.Printf("settings: CEROFF time: %s", d.Ceroff.Duration)
 	log.Printf("settings: CER crossing duration: %s", d.Intersect.Duration)
+	log.Printf("settings: ACS min night duration: %s", d.AcsNight.Duration)
+	log.Printf("settings: ACS duration: %s", d.AcsTime.Duration)
 }
 
 type Duration struct {
@@ -87,7 +157,7 @@ type fileset struct {
 	Ceron  string `toml:"ceron"`
 	Ceroff string `toml:"ceroff"`
 	Acson  string `toml:"acson"`
-	Acsoff  string `toml:"acsoff"`
+	Acsoff string `toml:"acsoff"`
 	Keep   bool   `toml:"-"`
 
 	Alliop    string `toml:"-"`
@@ -107,7 +177,7 @@ func (f fileset) CanACS() bool {
 }
 
 func (f fileset) Empty() bool {
-	return f.Rocon == "" && f.Rocoff == "" && f.Ceron == "" && f.Ceroff == ""
+	return f.Rocon == "" && f.Rocoff == "" && f.Ceron == "" && f.Ceroff == "" && f.Acson == "" && f.Acsoff == ""
 }
 
 func (f fileset) Can() error {
