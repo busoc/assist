@@ -69,6 +69,9 @@ information):
   - acs-time       = ACS expected execution time
   - acs-night      = ACS minimum night duration
 
+* area: configuring some boxes for automatic auroral captures
+  - boxes = array of rectangle that defined the north, east, south and west boundaries of a box
+
 * commands: configuring the location of the files that contain the commands
   - rocon  = file with commands for ROCON in text format
   - rocoff = file with commands for ROCOFF in text format
