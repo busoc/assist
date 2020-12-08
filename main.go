@@ -34,26 +34,26 @@ func init() {
 }
 
 func main() {
-	var fs fileset
-	d := delta{
-		Rocon:  Duration{time.Second * 50},
-		Rocoff: Duration{time.Second * 80},
-		Ceron:  Duration{time.Second * 40},
-		Ceroff: Duration{time.Second * 40},
-		Margin: Duration{time.Second * 120},
-		// Cer:          Duration{time.Second * 300},
-		Cer:          Duration{0},
-		Intersect:    Duration{DefaultIntersectTime},
-		AZM:          Duration{time.Second * 40},
-		Saa:          Duration{time.Second * 10},
-		CerBefore:    Duration{time.Second * 50},
-		CerAfter:     Duration{time.Second * 15},
-		CerBeforeRoc: Duration{time.Second * 45},
-		CerAfterRoc:  Duration{time.Second * 10},
-		AcsNight:     Duration{time.Second * 180},
-		AcsTime:      Duration{time.Second * 5},
-	}
 	var (
+		fs fileset
+		d  = delta{
+			Rocon:  Duration{time.Second * 50},
+			Rocoff: Duration{time.Second * 80},
+			Ceron:  Duration{time.Second * 40},
+			Ceroff: Duration{time.Second * 40},
+			Margin: Duration{time.Second * 120},
+			// Cer:          Duration{time.Second * 300},
+			Cer:          Duration{0},
+			Intersect:    Duration{DefaultIntersectTime},
+			AZM:          Duration{time.Second * 40},
+			Saa:          Duration{time.Second * 10},
+			CerBefore:    Duration{time.Second * 50},
+			CerAfter:     Duration{time.Second * 15},
+			CerBeforeRoc: Duration{time.Second * 45},
+			CerAfterRoc:  Duration{time.Second * 10},
+			AcsNight:     Duration{time.Second * 180},
+			AcsTime:      Duration{time.Second * 5},
+		}
 		baseTime = flag.String("base-time", DefaultBaseTime.Format("2006-01-02T15:04:05Z"), "schedule start time")
 		elist    = flag.Bool("list-entries", false, "schedule list")
 		plist    = flag.Bool("list-periods", false, "periods list")
@@ -87,8 +87,13 @@ func main() {
 		}
 		return
 	}
+	err = createSchedule(s, d, fs, b)
+	Exit(checkError(err, nil))
+}
+
+func createSchedule(s *Schedule, d delta, fs fileset, b time.Time) error {
 	if err := fs.Can(); err != nil {
-		Exit(err)
+		return err
 	}
 	dumpSettings(d, fs)
 
@@ -105,30 +110,33 @@ func main() {
 		fs.Alliop = "alliop"
 		w = io.MultiWriter(digest, os.Stdout)
 	default:
-		Exit(checkError(err, nil))
+		return err
 	}
-	es, err = s.Filter(b).Schedule(d, fs.CanROC(), fs.CanCER(), fs.CanACS())
+	es, err := s.Filter(b).Schedule(d, fs.CanROC(), fs.CanCER(), fs.CanACS())
 	if err != nil {
-		Exit(checkError(err, nil))
+		return err
 	}
 	if len(es) == 0 {
-		return
+		return nil
 	}
 	first, last := es[0], es[len(es)-1]
 	log.Printf("first command (%s) at %s (%d)", first.Label, first.When.Format(timeFormat), SOY(first.When))
 	log.Printf("last command (%s) at %s (%d)", last.Label, last.When.Format(timeFormat), SOY(last.When))
+
 	b = es[0].When.Add(-Five)
 	writePreamble(w, b)
 	if err := writeMetadata(w, fs); err != nil {
-		Exit(err)
+		return err
 	}
 	ms, err := writeSchedule(w, es, b, fs)
 	if err != nil {
-		Exit(err)
+		return err
 	}
+
 	for n, c := range ms {
 		log.Printf("%s scheduled: %d", n, c)
 	}
+
 	_, tr := TimeROC(es, d)
 	log.Printf("MXGS-ROC total time: %s", tr)
 	_, tc := TimeCER(es, d)
@@ -137,9 +145,7 @@ func main() {
 	log.Printf("ASIM-ACS total time: %s", ta)
 	log.Printf("md5 %s: %x", fs.Alliop, digest.Sum(nil))
 
-	if err := writeList(fs.Instrlist, fs.CanROC() && tr > 0, fs.CanCER() && tc > 0); err != nil {
-		Exit(err)
-	}
+	return writeList(fs.Instrlist, fs.CanROC() && tr > 0, fs.CanCER() && tc > 0)
 }
 
 func loadFromConfig(file string, d *delta, fs *fileset) (*Schedule, error) {
