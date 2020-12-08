@@ -175,7 +175,7 @@ func (s *Schedule) scheduleACSOFF(p *Period, rs []*Period, d delta) *Entry {
 		e.When = p.Ends
 		return &e
 	}
-	if p.Ends.Add(d.AcsTime.Duration).Before(other.Ends) {
+	if p.Ends.Add(d.AcsTime.Duration).Before(other.Ends.Add(-d.Rocoff.Duration)) {
 		e.When = p.Ends.Add(-d.AcsTime.Duration)
 		return &e
 	}
@@ -184,7 +184,7 @@ func (s *Schedule) scheduleACSOFF(p *Period, rs []*Period, d delta) *Entry {
 
 func (s *Schedule) scheduleACSON(p *Period, rs []*Entry, d delta) *Entry {
 	var (
-		min    = d.AcsNight.Duration + 2*d.AcsTime.Duration
+		min    = d.Rocon.Duration + d.Wait.Duration
 		starts = p.Starts.Add(-min)
 		ends   = p.Starts.Add(min)
 	)
@@ -201,7 +201,7 @@ func (s *Schedule) scheduleACSON(p *Period, rs []*Entry, d delta) *Entry {
 	if rocon == nil {
 		e.When = p.Starts
 	} else {
-		e.When = e.When.Add(d.Rocon.Duration)
+		e.When = e.When.Add(d.Rocon.Duration+d.Wait.Duration)
 	}
 	return &e
 }
