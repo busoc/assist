@@ -172,7 +172,7 @@ func (f Fileset) Can() bool {
 }
 
 type RocOption struct {
-	Fileset `toml:"commands"`
+	Fileset
 
 	TimeSAA      Duration `toml:"saa-duration"`
 	TimeAZM      Duration `toml:"azm-duration"`
@@ -187,7 +187,7 @@ func (r RocOption) Can() bool {
 }
 
 type CerOption struct {
-	Fileset `toml:"commands"`
+	Fileset
 
 	TimeOn  Duration `toml:"on-duration"`
 	TimeOff Duration `toml:"off-duration"`
@@ -206,7 +206,7 @@ func (c CerOption) Can() bool {
 }
 
 type AuroraOption struct {
-	Fileset `toml:"commands"`
+	Fileset
 
 	Night Duration `toml:"min-night-duration"`
 	Time  Duration `toml:"duration"`
