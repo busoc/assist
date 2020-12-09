@@ -30,7 +30,7 @@ off-duration      = "40s"
 on-cmd-file       = ".\\tmp\\assist\\files\\MMIA_CERON.txt"
 off-cmd-file      = ".\\tmp\\assist\\files\\MMIA_CEROFF.txt"
 
-[aurora]
+[acs]
 min-night-duration = "180s"
 duration           = "10s"
 areas              = [

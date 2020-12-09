@@ -25,7 +25,7 @@ type Assist struct {
 
 	ROC    RocOption    `toml:"roc"`
 	CER    CerOption    `toml:"cer"`
-	Aurora AuroraOption `toml:"aurora"`
+	ACS AuroraOption `toml:"acs"`
 
 	*Schedule `toml:"-"`
 }
@@ -34,7 +34,7 @@ func Default() *Assist {
 	return &Assist{
 		ROC:         rocDefault,
 		CER:         cerDefault,
-		Aurora:      aurDefault,
+		ACS:      aurDefault,
 		Instr:       INSTR,
 		Alliop:      ALLIOP,
 		KeepComment: true,
@@ -48,7 +48,7 @@ func (a *Assist) Load(file string) error {
 	}
 
 	var (
-		area = a.Aurora.Area()
+		area = a.ACS.Area()
 		err  error
 	)
 	if a.Trajectory != "" {
@@ -85,7 +85,7 @@ func (a *Assist) Create() error {
 		return err
 	}
 
-	es, err := a.Schedule.Schedule(a.ROC, a.CER, a.Aurora)
+	es, err := a.Schedule.Schedule(a.ROC, a.CER, a.ACS)
 	if err != nil {
 		return err
 	}
@@ -166,7 +166,7 @@ func (a *Assist) PrintEntries() error {
 		rowpat  = "%3d | %s | %-9s | %-9d | %-20s | %-20s"
 		timefmt = "2006-01-02T15:04:05"
 	)
-	es, err := a.Schedule.Schedule(a.ROC, a.CER, a.Aurora)
+	es, err := a.Schedule.Schedule(a.ROC, a.CER, a.ACS)
 	if err != nil {
 		return err
 	}
@@ -203,8 +203,8 @@ func (a *Assist) PrintEntries() error {
 			certime += a.CER.TimeOff.Duration
 			cercount++
 		case ACSON, ACSOFF:
-			to = e.When.Add(a.Aurora.Time.Duration)
-			acstime += a.Aurora.Time.Duration
+			to = e.When.Add(a.ACS.Time.Duration)
+			acstime += a.ACS.Time.Duration
 			acscount++
 		}
 		conflict := "-"
@@ -274,19 +274,19 @@ func (a *Assist) writeSchedule(w io.Writer, es []Entry, when time.Time) (map[str
 			curr.Count++
 			curr.Duration += a.CER.TimeOff.Duration
 		case ACSON:
-			if err := a.Aurora.Check(); err != nil {
+			if err := a.ACS.Check(); err != nil {
 				return nil, err
 			}
-			cid, delta, err = a.writeCommands(w, a.Aurora.On, cid, e.When, delta)
+			cid, delta, err = a.writeCommands(w, a.ACS.On, cid, e.When, delta)
 			curr.Count++
-			curr.Duration += a.Aurora.Time.Duration
+			curr.Duration += a.ACS.Time.Duration
 		case ACSOFF:
-			if err := a.Aurora.Check(); err != nil {
+			if err := a.ACS.Check(); err != nil {
 				return nil, err
 			}
-			cid, delta, err = a.writeCommands(w, a.Aurora.Off, cid, e.When, delta)
+			cid, delta, err = a.writeCommands(w, a.ACS.Off, cid, e.When, delta)
 			curr.Count++
-			curr.Duration += a.Aurora.Time.Duration
+			curr.Duration += a.ACS.Time.Duration
 		}
 		if err != nil {
 			return nil, err
@@ -305,8 +305,8 @@ func (a *Assist) printSettings() {
 	log.Printf("settings: CERON time: %s", a.CER.TimeOn.Duration)
 	log.Printf("settings: CEROFF time: %s", a.CER.TimeOff.Duration)
 	log.Printf("settings: CER crossing duration: %s", a.CER.SaaCrossingTime.Duration)
-	log.Printf("settings: ACS night duration: %s", a.Aurora.Night.Duration)
-	log.Printf("settings: ACS duration: %s", a.Aurora.Time.Duration)
+	log.Printf("settings: ACS night duration: %s", a.ACS.Night.Duration)
+	log.Printf("settings: ACS duration: %s", a.ACS.Time.Duration)
 }
 
 func (a *Assist) printRanges(es []Entry) {
@@ -366,8 +366,8 @@ func (a *Assist) writeMetadata(w io.Writer) error {
 			a.ROC.Off,
 			a.CER.On,
 			a.CER.Off,
-			a.Aurora.On,
-			a.Aurora.Off,
+			a.ACS.On,
+			a.ACS.Off,
 		}
 		digest = md5.New()
 	)
