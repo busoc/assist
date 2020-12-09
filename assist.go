@@ -1,14 +1,14 @@
 package main
 
 import (
-  "bufio"
-  "bytes"
-  "log"
+	"bufio"
+	"bytes"
 	"crypto/md5"
 	"fmt"
-  "hash"
+	"hash"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -28,6 +28,18 @@ type Assist struct {
 	Aurora AuroraOption `toml:"aurora"`
 
 	*Schedule `toml:"-"`
+}
+
+func Default() *Assist {
+	return &Assist{
+		ROC:         rocDefault,
+		CER:         cerDefault,
+		Aurora:      aurDefault,
+		Instr:       INSTR,
+		Alliop:      ALLIOP,
+		KeepComment: true,
+		Resolution:  NewDuration(1),
+	}
 }
 
 func (a *Assist) Load(file string) error {
@@ -80,7 +92,7 @@ func (a *Assist) Create() error {
 	if len(es) == 0 {
 		return nil
 	}
-  a.printRanges(es)
+	a.printRanges(es)
 
 	base := es[0].When.Add(-Five)
 	a.writePreamble(w, base)
@@ -97,17 +109,21 @@ func (a *Assist) Create() error {
 		log.Printf("%s scheduled: %d", n, c.Count)
 	}
 
-  var (
-    rocdur = ms[ROCON].Duration + ms[ROCOFF].Duration
-    cerdur = ms[CERON].Duration + ms[CEROFF].Duration
-    acsdur = ms[ACSON].Duration + ms[ACSOFF].Duration
-  )
+	var (
+		rocdur = ms[ROCON].Duration + ms[ROCOFF].Duration
+		cerdur = ms[CERON].Duration + ms[CEROFF].Duration
+		acsdur = ms[ACSON].Duration + ms[ACSOFF].Duration
+	)
 	log.Printf("MXGS-ROC total time: %s", rocdur)
 	log.Printf("MMIA-CER total time: %s", cerdur)
 	log.Printf("ASIM-ACS total time: %s", acsdur)
 	log.Printf("md5 %s: %x", a.Alliop, digest.Sum(nil))
 
 	return a.writeList(rocdur > 0 || acsdur > 0, cerdur > 0)
+}
+
+func (a *Assist) PrintSettings() error {
+  return nil
 }
 
 func (a *Assist) PrintPeriods() error {
@@ -209,73 +225,73 @@ func (a *Assist) PrintEntries() error {
 }
 
 type coze struct {
-  Count int
-  Duration time.Duration
+	Count    int
+	Duration time.Duration
 }
 
 func (a *Assist) writeSchedule(w io.Writer, es []*Entry, when time.Time) (map[string]coze, error) {
 	var (
-    err error
-    cid = 1
-    ms = make(map[string]coze)
-  )
+		err error
+		cid = 1
+		ms  = make(map[string]coze)
+	)
 
 	for _, e := range es {
 		if e.When.Before(when) {
 			continue
 		}
-    var (
-      delta = e.When.Sub(when)
-      curr = ms[e.Label]
-    )
+		var (
+			delta = e.When.Sub(when)
+			curr  = ms[e.Label]
+		)
 		switch e.Label {
 		case ROCON:
-      if err := a.ROC.Check(); err != nil {
+			if err := a.ROC.Check(); err != nil {
 				return nil, err
 			}
 			cid, delta, err = a.writeCommands(w, a.ROC.On, cid, e.When, delta)
 			curr.Count++
-      curr.Duration += a.ROC.TimeOn.Duration
+			curr.Duration += a.ROC.TimeOn.Duration
 		case ROCOFF:
-      if err := a.ROC.Check(); err != nil {
+			if err := a.ROC.Check(); err != nil {
 				return nil, err
 			}
 			cid, delta, err = a.writeCommands(w, a.ROC.Off, cid, e.When, delta)
-      curr.Count++
-      curr.Duration += a.ROC.TimeOff.Duration
+			curr.Count++
+			curr.Duration += a.ROC.TimeOff.Duration
 		case CERON:
-      if err := a.CER.Check(); err != nil {
+			if err := a.CER.Check(); err != nil {
 				return nil, err
 			}
 			cid, delta, err = a.writeCommands(w, a.CER.On, cid, e.When, delta)
-      curr.Count++
-      curr.Duration += a.CER.TimeOn.Duration
+			curr.Count++
+			curr.Duration += a.CER.TimeOn.Duration
 		case CEROFF:
-      if err := a.CER.Check(); err != nil {
+			if err := a.CER.Check(); err != nil {
 				return nil, err
 			}
 			cid, delta, err = a.writeCommands(w, a.CER.Off, cid, e.When, delta)
-      curr.Count++
-      curr.Duration += a.CER.TimeOff.Duration
+			curr.Count++
+			curr.Duration += a.CER.TimeOff.Duration
 		case ACSON:
-      if err := a.Aurora.Check(); err != nil {
+			if err := a.Aurora.Check(); err != nil {
 				return nil, err
 			}
 			cid, delta, err = a.writeCommands(w, a.Aurora.On, cid, e.When, delta)
-      curr.Count++
-      curr.Duration += a.Aurora.Time.Duration
+			curr.Count++
+			curr.Duration += a.Aurora.Time.Duration
 		case ACSOFF:
 			if err := a.Aurora.Check(); err != nil {
 				return nil, err
 			}
 			cid, delta, err = a.writeCommands(w, a.Aurora.Off, cid, e.When, delta)
-      curr.Count++
-      curr.Duration += a.Aurora.Time.Duration
+			curr.Count++
+			curr.Duration += a.Aurora.Time.Duration
 		}
 		if err != nil {
 			return nil, err
 		}
-    ms[e.Label] = curr
+		ms[e.Label] = curr
 	}
 	return ms, nil
 }
@@ -285,7 +301,7 @@ func (a *Assist) printSettings() {
 	log.Printf("settings: AZM duration: %s", a.ROC.TimeAZM.Duration)
 	log.Printf("settings: ROCON time: %s", a.ROC.TimeOn.Duration)
 	log.Printf("settings: ROCOFF time: %s", a.ROC.TimeOff.Duration)
-  log.Printf("settings: CER time: %s", a.CER.SwitchTime.Duration)
+	log.Printf("settings: CER time: %s", a.CER.SwitchTime.Duration)
 	log.Printf("settings: CERON time: %s", a.CER.TimeOn.Duration)
 	log.Printf("settings: CEROFF time: %s", a.CER.TimeOff.Duration)
 	log.Printf("settings: CER crossing duration: %s", a.CER.SaaCrossingTime.Duration)
@@ -294,7 +310,7 @@ func (a *Assist) printSettings() {
 }
 
 func (a *Assist) printRanges(es []*Entry) {
-  fst, lst := es[0], es[len(es)-1]
+	fst, lst := es[0], es[len(es)-1]
 	log.Printf("first command (%s) at %s (%d)", fst.Label, fst.When.Format(timeFormat), SOY(fst.When))
 	log.Printf("last command (%s) at %s (%d)", lst.Label, lst.When.Format(timeFormat), SOY(lst.When))
 }
@@ -317,10 +333,10 @@ func (a *Assist) writePreamble(w io.Writer, when time.Time) {
 }
 
 func (a *Assist) writeMetadata(w io.Writer) error {
-  aboutFile := func(file string, digest hash.Hash) error {
-    defer digest.Reset()
+	aboutFile := func(file string, digest hash.Hash) error {
+		defer digest.Reset()
 
-    r, err := os.Open(file)
+		r, err := os.Open(file)
 		if err != nil {
 			return checkError(err, nil)
 		}
@@ -341,8 +357,8 @@ func (a *Assist) writeMetadata(w io.Writer) error {
 		log.Printf("%s: md5 = %x, lastmod: %s, size: %d bytes", file, sum, modtime, filesize)
 		fmt.Fprintf(w, "# %s: md5 = %x, lastmod: %s, size : %d bytes", file, sum, modtime, filesize)
 		fmt.Fprintln(w)
-    return nil
-  }
+		return nil
+	}
 	var (
 		files = []string{
 			a.Trajectory,
@@ -359,9 +375,9 @@ func (a *Assist) writeMetadata(w io.Writer) error {
 		if f == "" {
 			continue
 		}
-    if err := aboutFile(f, digest); err != nil {
-      return err
-    }
+		if err := aboutFile(f, digest); err != nil {
+			return err
+		}
 	}
 	fmt.Fprintln(w)
 	return nil
@@ -377,10 +393,10 @@ func (a *Assist) writeList(mxgs, mmia bool) error {
 	case err == nil:
 		defer f.Close()
 
-    var (
-      digest = md5.New()
-      w = io.MultiWriter(f, digest)
-    )
+		var (
+			digest = md5.New()
+			w      = io.MultiWriter(f, digest)
+		)
 
 		if mxgs {
 			fmt.Fprintln(w, InstrMXGS)

@@ -7,24 +7,30 @@ import (
 	"time"
 )
 
-// var DefaultDelta = delta{
-// 	Rocon:  Duration{time.Second * 50},
-// 	Rocoff: Duration{time.Second * 80},
-// 	Ceron:  Duration{time.Second * 40},
-// 	Ceroff: Duration{time.Second * 40},
-// 	Margin: Duration{time.Second * 120},
-// 	// Cer:          Duration{time.Second * 300},
-// 	Cer:          Duration{0},
-// 	Intersect:    Duration{DefaultIntersectTime},
-// 	AZM:          Duration{time.Second * 40},
-// 	Saa:          Duration{time.Second * 10},
-// 	CerBefore:    Duration{time.Second * 50},
-// 	CerAfter:     Duration{time.Second * 15},
-// 	CerBeforeRoc: Duration{time.Second * 45},
-// 	CerAfterRoc:  Duration{time.Second * 10},
-// 	AcsNight:     Duration{time.Second * 180},
-// 	AcsTime:      Duration{time.Second * 5},
-// }
+var (
+	rocDefault = RocOption{
+		TimeSAA:      NewDuration(10),
+		TimeAZM:      NewDuration(40),
+		TimeOn:       NewDuration(50),
+		TimeOff:      NewDuration(80),
+		TimeBetween:  NewDuration(120),
+		WaitBeforeOn: NewDuration(100),
+	}
+	cerDefault = CerOption{
+		SwitchTime:      NewDuration(0),
+		SaaCrossingTime: NewDuration(120),
+		BeforeSaa:       NewDuration(50),
+		AfterSaa:        NewDuration(15),
+		BeforeRoc:       NewDuration(45),
+		AfterRoc:        NewDuration(10),
+		TimeOn:          NewDuration(40),
+		TimeOff:         NewDuration(40),
+	}
+	aurDefault = AuroraOption{
+		Night: NewDuration(180),
+		Time:  NewDuration(5),
+	}
+)
 
 const (
 	ROCON  = "ROCON"

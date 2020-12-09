@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
 	"log"
+	"os"
 	"time"
 )
 
@@ -50,7 +50,7 @@ func main() {
 	if base.IsZero() {
 		base = DefaultBaseTime
 	}
-	var ast Assist
+	ast := Default()
 	if err := ast.LoadAndFilter(flag.Arg(0), base); err != nil {
 		Exit(checkError(err, nil))
 	}

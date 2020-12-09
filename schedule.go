@@ -24,10 +24,9 @@ const (
 const Leap = 18 * time.Second
 
 const (
-	DefaultDeltaTime     = time.Second * 30
-	DefaultIntersectTime = time.Second * 120
-	Day                  = time.Hour * 24
-	Five                 = time.Second * 5
+	DefaultDeltaTime = time.Second * 30
+	Day              = time.Hour * 24
+	Five             = time.Second * 5
 )
 
 type Entry struct {
@@ -145,7 +144,7 @@ func (s *Schedule) Schedule(roc RocOption, cer CerOption, aur AuroraOption) ([]*
 		return nil, err
 	}
 	cs, err := s.ScheduleACS(aur, roc, rs)
-	if  err != nil {
+	if err != nil {
 		return nil, err
 	} else {
 	}
