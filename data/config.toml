@@ -1,0 +1,45 @@
+alliop       = ".\\tmp\\assist\\alliop-1.txt"
+instrlist    = ".\\tmp\\assist\\instrlist-1.txt"
+keep-comment = true
+path         = ".\\tmp\\trajectory.csv"
+resolution   = "1s"
+
+[roc]
+wait-before-on      = "100s"
+on-duration         = "60s"
+off-duration        = "90s"
+azm-duration        = "50s"
+time-between-onoff  = "120s"
+saa-duration        = "10s"
+
+  [roc.commands]
+  on-cmd-file         = ".\\tmp\\assist\\files\\MXGS_ROCON.txt"
+  off-cmd-file        = ".\\tmp\\assist\\files\\MXGS_ROCOFF.txt"
+
+[cer]
+# schedule CER inside
+time-before-saa   = "50s"
+time-after-saa    = "20s"
+time-before-roc   = "50s"
+time-after-roc    = "10s"
+# schedule CER outside
+switch-onoff-time = "0s"
+saa-crossing-time = "120s"
+
+on-duration  = "40s"
+off-duration = "40s"
+
+  [cer.commands]
+  on-cmd-file       = ".\\tmp\\assist\\files\\MMIA_CERON.txt"
+  off-cmd-file      = ".\\tmp\\assist\\files\\MMIA_CEROFF.txt"
+
+[aurora]
+min-night-duration = "180s"
+duration           = "10s"
+areas              = [
+	{east = -70, north = 180, south = 45, west = -120},
+	{east = 170, north = -30, south = -180, west = 50},
+]
+  [aurora.commands]
+  on-cmd-file        = ".\\tmp\\assist\\files\\MXGS_ACSON.txt"
+  off-cmd-file       = ".\\tmp\\assist\\files\\MXGS_ACSOFF.txt"

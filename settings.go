@@ -2,29 +2,29 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"os"
 	"strings"
 	"time"
 )
 
-var DefaultDelta = delta{
-	Rocon:  Duration{time.Second * 50},
-	Rocoff: Duration{time.Second * 80},
-	Ceron:  Duration{time.Second * 40},
-	Ceroff: Duration{time.Second * 40},
-	Margin: Duration{time.Second * 120},
-	// Cer:          Duration{time.Second * 300},
-	Cer:          Duration{0},
-	Intersect:    Duration{DefaultIntersectTime},
-	AZM:          Duration{time.Second * 40},
-	Saa:          Duration{time.Second * 10},
-	CerBefore:    Duration{time.Second * 50},
-	CerAfter:     Duration{time.Second * 15},
-	CerBeforeRoc: Duration{time.Second * 45},
-	CerAfterRoc:  Duration{time.Second * 10},
-	AcsNight:     Duration{time.Second * 180},
-	AcsTime:      Duration{time.Second * 5},
-}
+// var DefaultDelta = delta{
+// 	Rocon:  Duration{time.Second * 50},
+// 	Rocoff: Duration{time.Second * 80},
+// 	Ceron:  Duration{time.Second * 40},
+// 	Ceroff: Duration{time.Second * 40},
+// 	Margin: Duration{time.Second * 120},
+// 	// Cer:          Duration{time.Second * 300},
+// 	Cer:          Duration{0},
+// 	Intersect:    Duration{DefaultIntersectTime},
+// 	AZM:          Duration{time.Second * 40},
+// 	Saa:          Duration{time.Second * 10},
+// 	CerBefore:    Duration{time.Second * 50},
+// 	CerAfter:     Duration{time.Second * 15},
+// 	CerBeforeRoc: Duration{time.Second * 45},
+// 	CerAfterRoc:  Duration{time.Second * 10},
+// 	AcsNight:     Duration{time.Second * 180},
+// 	AcsTime:      Duration{time.Second * 5},
+// }
 
 const (
 	ROCON  = "ROCON"
@@ -118,21 +118,17 @@ func (a Area) Contains(lat, lng float64) bool {
 	return false
 }
 
-func dumpSettings(d delta, fs fileset) {
-	log.Printf("%s-%s (build: %s)", Program, Version, BuildTime)
-	log.Printf("settings: AZM duration: %s", d.AZM.Duration)
-	log.Printf("settings: ROCON time: %s", d.Rocon.Duration)
-	log.Printf("settings: ROCOFF time: %s", d.Rocoff.Duration)
-	log.Printf("settings: CER time: %s", d.Cer.Duration)
-	log.Printf("settings: CERON time: %s", d.Ceron.Duration)
-	log.Printf("settings: CEROFF time: %s", d.Ceroff.Duration)
-	log.Printf("settings: CER crossing duration: %s", d.Intersect.Duration)
-	log.Printf("settings: ACS min night duration: %s", d.AcsNight.Duration)
-	log.Printf("settings: ACS duration: %s", d.AcsTime.Duration)
-}
-
 type Duration struct {
 	time.Duration
+}
+
+func NewDuration(sec int) Duration {
+	d := time.Second * time.Duration(sec)
+	return Duration{d}
+}
+
+func (d *Duration) IsZero() bool {
+	return d.Duration == 0
 }
 
 func (d *Duration) String() string {
@@ -147,73 +143,82 @@ func (d *Duration) Set(s string) error {
 	return err
 }
 
-type delta struct {
-	Rocon     Duration `toml:"rocon"`
-	Rocoff    Duration `toml:"rocoff"`
-	Ceron     Duration `toml:"ceron"`
-	Ceroff    Duration `toml:"ceron"`
-	Margin    Duration `toml:"margin"`
-	Cer       Duration `toml:"cer"`
-	Wait      Duration `toml:"wait"`
-	Intersect Duration `toml:"crossing"`
-	AZM       Duration `toml:"azm"`
-	Saa       Duration `toml:"saa"`
-
-	CerBefore    Duration `toml:"cer-before"`
-	CerAfter     Duration `toml:"cer-after"`
-	CerBeforeRoc Duration `toml:"cer-before-roc"`
-	CerAfterRoc  Duration `toml:"cer-after-roc"`
-
-	AcsNight Duration `toml:"acs-night"`
-	AcsTime  Duration `toml:"acs-duration"`
+type Fileset struct {
+	On  string `toml:"on-cmd-file"`
+	Off string `toml:"off-cmd-file"`
 }
 
-type fileset struct {
-	Path string `toml:"-"`
-
-	Rocon  string `toml:"rocon"`
-	Rocoff string `toml:"rocoff"`
-	Ceron  string `toml:"ceron"`
-	Ceroff string `toml:"ceroff"`
-	Acson  string `toml:"acson"`
-	Acsoff string `toml:"acsoff"`
-	Keep   bool   `toml:"-"`
-
-	Alliop    string `toml:"-"`
-	Instrlist string `toml:"-"`
-}
-
-func (f fileset) CanROC() bool {
-	return f.Rocon != "" && f.Rocoff != ""
-}
-
-func (f fileset) CanCER() bool {
-	return f.Ceron != "" && f.Ceroff != ""
-}
-
-func (f fileset) CanACS() bool {
-	return f.Acson != "" && f.Acsoff != ""
-}
-
-func (f fileset) Empty() bool {
-	return f.Rocon == "" && f.Rocoff == "" && f.Ceron == "" && f.Ceroff == "" && f.Acson == "" && f.Acsoff == ""
-}
-
-func (f fileset) Can() error {
-	if (f.Rocon == "" && f.Rocoff != "") || (f.Rocon != "" && f.Rocoff == "") {
-		return missingFile("ROC")
+func (f Fileset) Check() error {
+	if f.On == f.Off {
+		return sameFile("cmd-file")
 	}
-	if f.Rocon != "" && f.Rocoff != "" && f.Rocon == f.Rocoff {
-		return sameFile("ROC")
+	if i, err := os.Stat(f.On); err != nil || !i.Mode().IsRegular() {
+		return missingFile(f.On)
 	}
-	if (f.Ceron == "" && f.Ceroff != "") || (f.Ceron != "" && f.Ceroff == "") {
-		return missingFile("CER")
-	}
-	if f.Ceron != "" && f.Ceroff != "" && f.Ceron == f.Ceroff {
-		return sameFile("CER")
-	}
-	if f.Empty() {
-		return genericErr("no command files given")
+	if i, err := os.Stat(f.Off); err != nil || !i.Mode().IsRegular() {
+		return missingFile(f.Off)
 	}
 	return nil
+}
+
+func (f Fileset) Can() bool {
+	return f.Check() == nil
+}
+
+type RocOption struct {
+	Fileset `toml:"commands"`
+
+	TimeSAA      Duration `toml:"saa-duration"`
+	TimeAZM      Duration `toml:"azm-duration"`
+	TimeOn       Duration `toml:"on-duration"`
+	TimeOff      Duration `toml:"off-duration"`
+	TimeBetween  Duration `toml:"time-between-onoff"`
+	WaitBeforeOn Duration `toml:"wait-before-on"`
+}
+
+func (r RocOption) Can() bool {
+	return r.Fileset.Can() && !r.TimeOn.IsZero() && !r.TimeOff.IsZero()
+}
+
+type CerOption struct {
+	Fileset `toml:"commands"`
+
+	TimeOn  Duration `toml:"on-duration"`
+	TimeOff Duration `toml:"off-duration"`
+
+	BeforeSaa Duration `toml:"time-before-saa"`
+	AfterSaa  Duration `toml:"time-after-saa"`
+	BeforeRoc Duration `toml:"time-before-roc"`
+	AfterRoc  Duration `toml:"time-after-roc"`
+
+	SaaCrossingTime Duration `toml:"saa-crossing-time"`
+	SwitchTime      Duration `toml:"switch-onoff-time"`
+}
+
+func (c CerOption) Can() bool {
+	return c.Fileset.Can()
+}
+
+type AuroraOption struct {
+	Fileset `toml:"commands"`
+
+	Night Duration `toml:"min-night-duration"`
+	Time  Duration `toml:"duration"`
+	Areas []Rect   `toml:"areas"`
+}
+
+func (a AuroraOption) Can() bool {
+	return a.Fileset.Can() && !a.Night.IsZero() && len(a.Areas) > 0
+}
+
+func (a AuroraOption) Accept(p *Period) bool {
+	return p.Duration() >= (a.Night.Duration + 2*a.Time.Duration)
+}
+
+func (a AuroraOption) Area() Shape {
+	rs := make([]Shape, len(a.Areas))
+	for i := range a.Areas {
+		rs[i] = a.Areas[i]
+	}
+	return NewArea(rs...)
 }

@@ -110,81 +110,71 @@ func (s *Schedule) Periods() []*Period {
 	return es
 }
 
-func (s *Schedule) Schedule(d delta, roc, cer, acs bool) ([]*Entry, error) {
-	if !roc && !cer {
-		return nil, nil
-	}
-	var es []*Entry
-	if roc {
-		if vs, err := s.scheduleROC(d.Rocon.Duration, d.Rocoff.Duration, d.Wait.Duration, d.AZM.Duration, d.Margin.Duration, d.Saa.Duration); err != nil {
-			return nil, err
-		} else {
-			es = append(es, vs...)
-		}
-	}
-	switch {
-	case cer && d.Cer.Duration > 0:
-		if vs, err := s.scheduleOutsideCER(d.Cer.Duration, d.Intersect.Duration); err != nil {
-			return nil, err
-		} else {
-			es = append(es, vs...)
-		}
-	case cer && d.Cer.Duration == 0:
-		if vs, err := s.scheduleInsideCER(d, es); err != nil {
-			return nil, err
-		} else {
-			es = append(es, vs...)
-		}
-	default:
-	}
-	if acs {
-		if vs, err := s.scheduleACS(d, es); err != nil {
-			return nil, err
-		} else {
-			es = append(es, vs...)
-		}
-	}
-	sort.Slice(es, func(i, j int) bool { return es[i].When.Before(es[j].When) })
-	return es, nil
+func (s *Schedule) ScheduleROC(roc RocOption) ([]*Entry, error) {
+	return s.scheduleROC(roc)
 }
 
-func (s *Schedule) scheduleACS(d delta, rs []*Entry) ([]*Entry, error) {
-	var (
-		min = d.AcsNight.Duration + 2*d.AcsTime.Duration
-		es  = make([]*Entry, 0, len(rs))
-	)
+func (s *Schedule) ScheduleCER(cer CerOption, roc RocOption, rs []*Entry) ([]*Entry, error) {
+	if cer.SwitchTime.IsZero() {
+		return s.scheduleInsideCER(cer, roc, rs)
+	}
+	return s.scheduleOutsideCER(cer)
+}
+
+func (s *Schedule) ScheduleACS(aur AuroraOption, roc RocOption, rs []*Entry) ([]*Entry, error) {
+	var es []*Entry
 	for _, p := range s.Auroras {
-		// check that Eclipse has the minimum expected duration
-		if p.Duration() < min {
+		if !aur.Accept(p) {
 			continue
 		}
-		es = append(es, s.scheduleACSON(p, rs, d))
-		if off := s.scheduleACSOFF(p, s.Eclipses, d); off != nil {
+		es = append(es, s.scheduleACSON(p, rs, aur, roc))
+		if off := s.scheduleACSOFF(p, aur, roc); off != nil {
 			es = append(es, off)
 		}
 	}
 	return es, nil
 }
 
-func (s *Schedule) scheduleACSOFF(p *Period, rs []*Period, d delta) *Entry {
-	other := isCrossing(p, rs, func(curr, other *Period) bool {
-		return !other.Ends.Before(curr.Ends.Add(-d.AcsTime.Duration))
+func (s *Schedule) Schedule(roc RocOption, cer CerOption, aur AuroraOption) ([]*Entry, error) {
+	rs, err := s.ScheduleROC(roc)
+	if err != nil {
+		return nil, err
+	}
+	as, err := s.ScheduleCER(cer, roc, rs)
+	if err != nil {
+		return nil, err
+	}
+	cs, err := s.ScheduleACS(aur, roc, rs)
+	if  err != nil {
+		return nil, err
+	} else {
+	}
+	es := append([]*Entry{}, rs...)
+	es = append(es, as...)
+	es = append(es, cs...)
+	sort.Slice(es, func(i, j int) bool { return es[i].When.Before(es[j].When) })
+	return es, nil
+}
+
+func (s *Schedule) scheduleACSOFF(p *Period, aur AuroraOption, roc RocOption) *Entry {
+	other := isCrossing(p, s.Eclipses, func(curr, other *Period) bool {
+		return !other.Ends.Before(curr.Ends.Add(-aur.Time.Duration))
 	})
 	e := Entry{Label: ACSOFF}
 	if other == nil {
 		e.When = p.Ends
 		return &e
 	}
-	if p.Ends.Add(d.AcsTime.Duration).Before(other.Ends.Add(-d.Rocoff.Duration)) {
-		e.When = p.Ends.Add(-d.AcsTime.Duration)
+	if p.Ends.Add(aur.Time.Duration).Before(other.Ends.Add(-roc.TimeOff.Duration)) {
+		e.When = p.Ends.Add(-aur.Time.Duration)
 		return &e
 	}
 	return nil
 }
 
-func (s *Schedule) scheduleACSON(p *Period, rs []*Entry, d delta) *Entry {
+func (s *Schedule) scheduleACSON(p *Period, rs []*Entry, aur AuroraOption, roc RocOption) *Entry {
 	var (
-		min    = d.Rocon.Duration + d.Wait.Duration
+		min    = roc.TimeOn.Duration + roc.WaitBeforeOn.Duration
 		starts = p.Starts.Add(-min)
 		ends   = p.Starts.Add(min)
 	)
@@ -201,12 +191,12 @@ func (s *Schedule) scheduleACSON(p *Period, rs []*Entry, d delta) *Entry {
 	if rocon == nil {
 		e.When = p.Starts
 	} else {
-		e.When = e.When.Add(d.Rocon.Duration+d.Wait.Duration)
+		e.When = e.When.Add(roc.TimeOn.Duration + roc.WaitBeforeOn.Duration)
 	}
 	return &e
 }
 
-func (s *Schedule) scheduleInsideCER(d delta, rs []*Entry) ([]*Entry, error) {
+func (s *Schedule) scheduleInsideCER(cer CerOption, roc RocOption, rs []*Entry) ([]*Entry, error) {
 	predicate := func(e, a *Period) bool { return e.Overlaps(a) }
 
 	var es []*Entry
@@ -223,38 +213,43 @@ func (s *Schedule) scheduleInsideCER(d delta, rs []*Entry) ([]*Entry, error) {
 			f, t := as[0], as[len(as)-1]
 			p = &Period{Starts: f.Starts, Ends: t.Ends}
 		}
-		if p.Duration() < d.Intersect.Duration || e.Intersect(p) < d.Intersect.Duration {
+		if p.Duration() < cer.SaaCrossingTime.Duration || e.Intersect(p) < cer.SaaCrossingTime.Duration {
 			continue
 		}
-		cn := Entry{Label: CERON, When: p.Starts.Add(-d.CerBefore.Duration)}
+		cn := Entry{
+			Label: CERON,
+			When:  p.Starts.Add(-cer.BeforeSaa.Duration),
+		}
 		for i := len(rs) - 1; i >= 0; i-- {
 			r := rs[i]
 			var dr time.Duration
 			switch r.Label {
 			case ROCOFF:
-				dr = d.Rocoff.Duration
+				dr = roc.TimeOff.Duration
 			case ROCON:
-				dr = d.Rocon.Duration
+				dr = roc.TimeOn.Duration
 			}
-			if isBetween(r.When, r.When.Add(dr), cn.When) || isBetween(r.When, r.When.Add(dr), cn.When.Add(d.Ceron.Duration)) {
-				cn.When = r.When.Add(-d.CerBeforeRoc.Duration)
+			if isBetween(r.When, r.When.Add(dr), cn.When) || isBetween(r.When, r.When.Add(dr), cn.When.Add(cer.TimeOn.Duration)) {
+				cn.When = r.When.Add(-cer.BeforeRoc.Duration)
 				// break
 			}
 		}
-		cf := Entry{Label: CEROFF, When: p.Ends.Add(d.CerAfter.Duration)}
+		cf := Entry{
+			Label: CEROFF,
+			When:  p.Ends.Add(cer.AfterSaa.Duration),
+		}
 		for i := 0; i < len(rs); i++ {
 			r := rs[i]
 
 			var dr time.Duration
 			switch r.Label {
 			case ROCOFF:
-				dr = d.Rocoff.Duration
+				dr = roc.TimeOff.Duration
 			case ROCON:
-				dr = d.Rocon.Duration
+				dr = roc.TimeOn.Duration
 			}
-			if isBetween(r.When, r.When.Add(dr), cf.When) || isBetween(r.When, r.When.Add(dr), cf.When.Add(d.Ceroff.Duration)) {
-				cf.When = r.When.Add(dr + d.CerAfterRoc.Duration)
-				// break
+			if isBetween(r.When, r.When.Add(dr), cf.When) || isBetween(r.When, r.When.Add(dr), cf.When.Add(cer.TimeOff.Duration)) {
+				cf.When = r.When.Add(dr + cer.AfterRoc.Duration)
 			}
 		}
 		es = append(es, &cn, &cf)
@@ -262,7 +257,7 @@ func (s *Schedule) scheduleInsideCER(d delta, rs []*Entry) ([]*Entry, error) {
 	return es, nil
 }
 
-func (s *Schedule) scheduleOutsideCER(delta, intersect time.Duration) ([]*Entry, error) {
+func (s *Schedule) scheduleOutsideCER(cer CerOption) ([]*Entry, error) {
 	eclipses := make([]*Period, len(s.Eclipses))
 	copy(eclipses, s.Eclipses)
 
@@ -271,25 +266,33 @@ func (s *Schedule) scheduleOutsideCER(delta, intersect time.Duration) ([]*Entry,
 		es       []*Entry
 	)
 	predicate := func(e, a *Period) bool {
-		return intersect == 0 || e.Intersect(a) > intersect
+		return cer.SaaCrossingTime.IsZero() || e.Intersect(a) > cer.SaaCrossingTime.Duration
 	}
 	for len(eclipses) > 0 {
 		e := eclipses[0]
 		if a := isCrossing(e, s.Saas, predicate); a != nil {
 			crossing = true
-			es = append(es, &Entry{Label: CERON, When: e.Starts.Add(-delta)})
+			es = append(es, &Entry{
+				Label: CERON,
+				When:  e.Starts.Add(-cer.TimeOn.Duration),
+			})
 		} else {
 			crossing = false
-			es = append(es, &Entry{Label: CEROFF, When: e.Starts.Add(-delta)})
+			es = append(es, &Entry{
+				Label: CEROFF,
+				When:  e.Starts.Add(-cer.TimeOff.Duration),
+			})
 		}
-		eclipses = skipEclipses(eclipses[1:], s.Saas, crossing, intersect)
+		eclipses = skipEclipses(eclipses[1:], s.Saas, crossing, cer.SaaCrossingTime.Duration)
 	}
 	return es, nil
 }
 
-func (s *Schedule) scheduleROC(on, off, wait, azm, margin, saa time.Duration) ([]*Entry, error) {
-	predicate := func(e, a *Period) bool { return e.Overlaps(a) }
-	var es []*Entry
+func (s *Schedule) scheduleROC(roc RocOption) ([]*Entry, error) {
+	var (
+		es        []*Entry
+		predicate = func(e, a *Period) bool { return e.Overlaps(a) }
+	)
 
 	for _, e := range s.Eclipses {
 		as := isCrossingList(e, s.Saas, predicate)
@@ -301,16 +304,18 @@ func (s *Schedule) scheduleROC(on, off, wait, azm, margin, saa time.Duration) ([
 		default:
 			s1, s2 = as[0], as[z-1]
 		}
-		rocon := scheduleROCON(e, s1, on, wait, azm, saa)
-		rocoff := scheduleROCOFF(e, s2, off, azm, saa)
+		var (
+			rocon  = scheduleROCON(e, s1, roc)
+			rocoff = scheduleROCOFF(e, s2, roc)
+		)
 
-		if margin > 0 && rocoff.When.Sub(rocon.When.Add(on)) <= margin {
+		if !roc.TimeBetween.IsZero() && rocoff.When.Sub(rocon.When.Add(roc.TimeOn.Duration)) <= roc.TimeBetween.Duration {
 			if !s.Ignore {
 				continue
 			}
 			rocon.Warning, rocoff.Warning = true, true
 		}
-		if rocoff.When.Before(rocon.When) || rocoff.When.Sub(rocon.When) <= on {
+		if rocoff.When.Before(rocon.When) || rocoff.When.Sub(rocon.When) <= roc.TimeOn.Duration {
 			if !s.Ignore {
 				continue
 			}
@@ -321,64 +326,70 @@ func (s *Schedule) scheduleROC(on, off, wait, azm, margin, saa time.Duration) ([
 	return es, nil
 }
 
-func scheduleROCON(e, s *Period, on, wait, azm, saa time.Duration) *Entry {
-	y := Entry{Label: ROCON, When: e.Starts.Add(wait)}
+func scheduleROCON(e, s *Period, roc RocOption) *Entry {
+	y := Entry{
+		Label: ROCON,
+		When:  e.Starts.Add(roc.WaitBeforeOn.Duration),
+	}
 	if s == nil {
 		return &y
 	}
-	if saa > 0 && s.Duration() <= saa {
-		enter, exit := s.Starts, s.Starts.Add(2*azm)
-		if isBetween(enter, exit, y.When) || isBetween(enter, exit, y.When.Add(on)) {
+	if !roc.TimeSAA.IsZero() && s.Duration() <= roc.TimeSAA.Duration {
+		enter, exit := s.Starts, s.Starts.Add(2*roc.TimeAZM.Duration)
+		if isBetween(enter, exit, y.When) || isBetween(enter, exit, y.When.Add(roc.TimeOn.Duration)) {
 			y.When = exit
 		}
 		return &y
 	}
 	// check that ROCON does not completly overlap AZM of SAA enter
 	// then check that ROCON does not start within the AZM of the SAA enter
-	if y.When.Before(s.Starts) && y.When.Add(on).After(s.Starts.Add(azm)) {
-		y.When = s.Starts.Add(azm)
+	if y.When.Before(s.Starts) && y.When.Add(roc.TimeOn.Duration).After(s.Starts.Add(roc.TimeAZM.Duration)) {
+		y.When = s.Starts.Add(roc.TimeAZM.Duration)
 	}
-	if isBetween(s.Starts, s.Starts.Add(azm), y.When) || isBetween(s.Starts, s.Starts.Add(azm), y.When.Add(on)) {
-		y.When = s.Starts.Add(azm)
+	if isBetween(s.Starts, s.Starts.Add(roc.TimeAZM.Duration), y.When) || isBetween(s.Starts, s.Starts.Add(roc.TimeAZM.Duration), y.When.Add(roc.TimeOn.Duration)) {
+		y.When = s.Starts.Add(roc.TimeAZM.Duration)
 	}
 	// check that ROCON does not completly overlap AZM of SAA exit
 	// then check that ROCON does not start within the AZM of the SAA exit
-	if y.When.Before(s.Ends) && y.When.Add(on).After(s.Ends.Add(azm)) {
-		y.When = s.Ends.Add(azm)
+	if y.When.Before(s.Ends) && y.When.Add(roc.TimeOn.Duration).After(s.Ends.Add(roc.TimeAZM.Duration)) {
+		y.When = s.Ends.Add(roc.TimeAZM.Duration)
 	}
-	if isBetween(s.Ends, s.Ends.Add(azm), y.When) || isBetween(s.Ends, s.Ends.Add(azm), y.When.Add(on-time.Second)) {
-		y.When = s.Ends.Add(azm)
+	if isBetween(s.Ends, s.Ends.Add(roc.TimeAZM.Duration), y.When) || isBetween(s.Ends, s.Ends.Add(roc.TimeAZM.Duration), y.When.Add(roc.TimeOn.Duration-time.Second)) {
+		y.When = s.Ends.Add(roc.TimeAZM.Duration)
 	}
 	return &y
 }
 
-func scheduleROCOFF(e, s *Period, off, azm, saa time.Duration) *Entry {
-	y := Entry{Label: ROCOFF, When: e.Ends.Add(-off)}
+func scheduleROCOFF(e, s *Period, roc RocOption) *Entry {
+	y := Entry{
+		Label: ROCOFF,
+		When:  e.Ends.Add(-roc.TimeOff.Duration),
+	}
 	if s == nil {
 		return &y
 	}
-	if saa > 0 && s.Duration() <= saa {
-		enter, exit := s.Starts, s.Starts.Add(2*azm)
-		if isBetween(enter, exit, y.When) || isBetween(enter, exit, y.When.Add(off)) {
-			y.When = enter.Add(-off)
+	if roc.TimeSAA.Duration > 0 && s.Duration() <= roc.TimeSAA.Duration {
+		enter, exit := s.Starts, s.Starts.Add(2*roc.TimeAZM.Duration)
+		if isBetween(enter, exit, y.When) || isBetween(enter, exit, y.When.Add(roc.TimeOff.Duration)) {
+			y.When = enter.Add(-roc.TimeOff.Duration)
 		}
 		return &y
 	}
 	// check that ROCOFF does not completly overlap AZM of SAA exit
 	// then check that ROCOFF does not start within the AZM of the SAA exit
-	if y.When.Before(s.Ends) && y.When.Add(off).After(s.Ends.Add(azm)) {
-		y.When = s.Ends.Add(azm)
+	if y.When.Before(s.Ends) && y.When.Add(roc.TimeOff.Duration).After(s.Ends.Add(roc.TimeAZM.Duration)) {
+		y.When = s.Ends.Add(roc.TimeAZM.Duration)
 	}
-	if isBetween(s.Ends, s.Ends.Add(azm), y.When) || isBetween(s.Ends, s.Ends.Add(azm), y.When.Add(off)) {
-		y.When = s.Ends.Add(-off)
+	if isBetween(s.Ends, s.Ends.Add(roc.TimeAZM.Duration), y.When) || isBetween(s.Ends, s.Ends.Add(roc.TimeAZM.Duration), y.When.Add(roc.TimeOff.Duration)) {
+		y.When = s.Ends.Add(-roc.TimeOff.Duration)
 	}
 	// check that ROCON does not completly overlap AZM of SAA enter
 	// then check that ROCON does not start within the AZM of the SAA enter
-	if y.When.Before(s.Starts) && y.When.Add(off).After(s.Starts.Add(azm)) {
-		y.When = s.Starts.Add(-off)
+	if y.When.Before(s.Starts) && y.When.Add(roc.TimeOff.Duration).After(s.Starts.Add(roc.TimeAZM.Duration)) {
+		y.When = s.Starts.Add(-roc.TimeOff.Duration)
 	}
-	if isBetween(s.Starts, s.Starts.Add(azm-time.Second), y.When) || isBetween(s.Starts, s.Starts.Add(azm), y.When.Add(off)) {
-		y.When = s.Starts.Add(-off)
+	if isBetween(s.Starts, s.Starts.Add(roc.TimeAZM.Duration-time.Second), y.When) || isBetween(s.Starts, s.Starts.Add(roc.TimeAZM.Duration), y.When.Add(roc.TimeOff.Duration)) {
+		y.When = s.Starts.Add(-roc.TimeOff.Duration)
 	}
 	return &y
 }
