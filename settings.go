@@ -217,7 +217,7 @@ func (a AuroraOption) Can() bool {
 	return a.Fileset.Can() && !a.Night.IsZero() && len(a.Areas) > 0
 }
 
-func (a AuroraOption) Accept(p *Period) bool {
+func (a AuroraOption) Accept(p Period) bool {
 	return p.Duration() >= (a.Night.Duration + 2*a.Time.Duration)
 }
 

@@ -17,18 +17,18 @@ func (p Period) IsZero() bool {
 	return p.Starts.IsZero() && p.Ends.IsZero()
 }
 
-func (p Period) Contains(o *Period) bool {
+func (p Period) Contains(o Period) bool {
 	if o.Starts.Before(p.Starts) {
 		return false
 	}
 	return o.Starts.Add(o.Duration()).Before(p.Ends)
 }
 
-func (p Period) Overlaps(o *Period) bool {
+func (p Period) Overlaps(o Period) bool {
 	return !(o.Starts.After(p.Ends) || o.Ends.Before(p.Starts))
 }
 
-func (p Period) Intersect(o *Period) time.Duration {
+func (p Period) Intersect(o Period) time.Duration {
 	if !p.Overlaps(o) {
 		return 0
 	}

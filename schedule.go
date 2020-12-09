@@ -35,6 +35,10 @@ type Entry struct {
 	Warning bool
 }
 
+func (e Entry) IsZero() bool {
+	return e.When.IsZero()
+}
+
 func SOY(t time.Time) int64 {
 	year := t.AddDate(0, 0, -t.YearDay()+1).Truncate(Day)
 	stamp := t.Add(Leap)
@@ -47,9 +51,9 @@ func (e Entry) SOY() int64 {
 
 type Schedule struct {
 	Ignore   bool
-	Eclipses []*Period
-	Saas     []*Period
-	Auroras  []*Period
+	Eclipses []Period
+	Saas     []Period
+	Auroras  []Period
 }
 
 func Open(p string, d time.Duration, area Shape) (*Schedule, error) {
@@ -71,9 +75,9 @@ func (s *Schedule) Filter(t time.Time) *Schedule {
 		return s
 	}
 	var (
-		es = make([]*Period, 0, len(s.Eclipses))
-		as = make([]*Period, 0, len(s.Saas))
-		xs = make([]*Period, 0, len(s.Auroras))
+		es = make([]Period, 0, len(s.Eclipses))
+		as = make([]Period, 0, len(s.Saas))
+		xs = make([]Period, 0, len(s.Auroras))
 	)
 	for _, e := range s.Eclipses {
 		if e.Starts.After(t) {
@@ -99,8 +103,8 @@ func (s *Schedule) Filter(t time.Time) *Schedule {
 	return &c
 }
 
-func (s *Schedule) Periods() []*Period {
-	es := make([]*Period, 0, len(s.Eclipses)+len(s.Saas)+len(s.Auroras))
+func (s *Schedule) Periods() []Period {
+	es := make([]Period, 0, len(s.Eclipses)+len(s.Saas)+len(s.Auroras))
 	es = append(es, s.Eclipses...)
 	es = append(es, s.Saas...)
 	es = append(es, s.Auroras...)
@@ -109,32 +113,32 @@ func (s *Schedule) Periods() []*Period {
 	return es
 }
 
-func (s *Schedule) ScheduleROC(roc RocOption) ([]*Entry, error) {
+func (s *Schedule) ScheduleROC(roc RocOption) ([]Entry, error) {
 	return s.scheduleROC(roc)
 }
 
-func (s *Schedule) ScheduleCER(cer CerOption, roc RocOption, rs []*Entry) ([]*Entry, error) {
+func (s *Schedule) ScheduleCER(cer CerOption, roc RocOption, rs []Entry) ([]Entry, error) {
 	if cer.SwitchTime.IsZero() {
 		return s.scheduleInsideCER(cer, roc, rs)
 	}
 	return s.scheduleOutsideCER(cer)
 }
 
-func (s *Schedule) ScheduleACS(aur AuroraOption, roc RocOption, rs []*Entry) ([]*Entry, error) {
-	var es []*Entry
+func (s *Schedule) ScheduleACS(aur AuroraOption, roc RocOption, rs []Entry) ([]Entry, error) {
+	var es []Entry
 	for _, p := range s.Auroras {
 		if !aur.Accept(p) {
 			continue
 		}
 		es = append(es, s.scheduleACSON(p, rs, aur, roc))
-		if off := s.scheduleACSOFF(p, aur, roc); off != nil {
+		if off := s.scheduleACSOFF(p, aur, roc); !off.IsZero() {
 			es = append(es, off)
 		}
 	}
 	return es, nil
 }
 
-func (s *Schedule) Schedule(roc RocOption, cer CerOption, aur AuroraOption) ([]*Entry, error) {
+func (s *Schedule) Schedule(roc RocOption, cer CerOption, aur AuroraOption) ([]Entry, error) {
 	rs, err := s.ScheduleROC(roc)
 	if err != nil {
 		return nil, err
@@ -148,30 +152,29 @@ func (s *Schedule) Schedule(roc RocOption, cer CerOption, aur AuroraOption) ([]*
 		return nil, err
 	} else {
 	}
-	es := append([]*Entry{}, rs...)
+	es := append([]Entry{}, rs...)
 	es = append(es, as...)
 	es = append(es, cs...)
 	sort.Slice(es, func(i, j int) bool { return es[i].When.Before(es[j].When) })
 	return es, nil
 }
 
-func (s *Schedule) scheduleACSOFF(p *Period, aur AuroraOption, roc RocOption) *Entry {
-	other := isCrossing(p, s.Eclipses, func(curr, other *Period) bool {
+func (s *Schedule) scheduleACSOFF(p Period, aur AuroraOption, roc RocOption) Entry {
+	other := isCrossing(p, s.Eclipses, func(curr, other Period) bool {
 		return !other.Ends.Before(curr.Ends.Add(-aur.Time.Duration))
 	})
 	e := Entry{Label: ACSOFF}
-	if other == nil {
+	if other.IsZero() {
 		e.When = p.Ends
-		return &e
+		return e
 	}
 	if p.Ends.Add(aur.Time.Duration).Before(other.Ends.Add(-roc.TimeOff.Duration)) {
 		e.When = p.Ends.Add(-aur.Time.Duration)
-		return &e
 	}
-	return nil
+	return e
 }
 
-func (s *Schedule) scheduleACSON(p *Period, rs []*Entry, aur AuroraOption, roc RocOption) *Entry {
+func (s *Schedule) scheduleACSON(p Period, rs []Entry, aur AuroraOption, roc RocOption) Entry {
 	var (
 		min    = roc.TimeOn.Duration + roc.WaitBeforeOn.Duration
 		starts = p.Starts.Add(-min)
@@ -180,29 +183,29 @@ func (s *Schedule) scheduleACSON(p *Period, rs []*Entry, aur AuroraOption, roc R
 	// schedule ACSON: try to find the nearset ROCON in its execution time
 	// if no ROCON is found, ACSON can be scheduled at beginning of period
 	// otherwise, ACSON should be scheduled at end of ROCON
-	rocon := isNear(p, rs, func(e *Entry) bool {
+	rocon := isNear(p, rs, func(e Entry) bool {
 		if e.Label != ROCON {
 			return false
 		}
 		return e.When.After(starts) && e.When.Before(ends)
 	})
 	e := Entry{Label: ACSON}
-	if rocon == nil {
+	if rocon.IsZero() {
 		e.When = p.Starts
 	} else {
 		e.When = e.When.Add(roc.TimeOn.Duration + roc.WaitBeforeOn.Duration)
 	}
-	return &e
+	return e
 }
 
-func (s *Schedule) scheduleInsideCER(cer CerOption, roc RocOption, rs []*Entry) ([]*Entry, error) {
-	predicate := func(e, a *Period) bool { return e.Overlaps(a) }
+func (s *Schedule) scheduleInsideCER(cer CerOption, roc RocOption, rs []Entry) ([]Entry, error) {
+	predicate := func(e, a Period) bool { return e.Overlaps(a) }
 
-	var es []*Entry
+	var es []Entry
 	for _, e := range s.Eclipses {
 		as := isCrossingList(e, s.Saas, predicate)
 
-		var p *Period
+		var p Period
 		switch len(as) {
 		case 0:
 			continue
@@ -210,7 +213,10 @@ func (s *Schedule) scheduleInsideCER(cer CerOption, roc RocOption, rs []*Entry) 
 			p = as[0]
 		default:
 			f, t := as[0], as[len(as)-1]
-			p = &Period{Starts: f.Starts, Ends: t.Ends}
+			p = Period{
+				Starts: f.Starts,
+				Ends: t.Ends,
+			}
 		}
 		if p.Duration() < cer.SaaCrossingTime.Duration || e.Intersect(p) < cer.SaaCrossingTime.Duration {
 			continue
@@ -230,7 +236,6 @@ func (s *Schedule) scheduleInsideCER(cer CerOption, roc RocOption, rs []*Entry) 
 			}
 			if isBetween(r.When, r.When.Add(dr), cn.When) || isBetween(r.When, r.When.Add(dr), cn.When.Add(cer.TimeOn.Duration)) {
 				cn.When = r.When.Add(-cer.BeforeRoc.Duration)
-				// break
 			}
 		}
 		cf := Entry{
@@ -251,33 +256,33 @@ func (s *Schedule) scheduleInsideCER(cer CerOption, roc RocOption, rs []*Entry) 
 				cf.When = r.When.Add(dr + cer.AfterRoc.Duration)
 			}
 		}
-		es = append(es, &cn, &cf)
+		es = append(es, cn, cf)
 	}
 	return es, nil
 }
 
-func (s *Schedule) scheduleOutsideCER(cer CerOption) ([]*Entry, error) {
-	eclipses := make([]*Period, len(s.Eclipses))
+func (s *Schedule) scheduleOutsideCER(cer CerOption) ([]Entry, error) {
+	eclipses := make([]Period, len(s.Eclipses))
 	copy(eclipses, s.Eclipses)
 
 	var (
 		crossing bool
-		es       []*Entry
+		es       []Entry
 	)
-	predicate := func(e, a *Period) bool {
+	predicate := func(e, a Period) bool {
 		return cer.SaaCrossingTime.IsZero() || e.Intersect(a) > cer.SaaCrossingTime.Duration
 	}
 	for len(eclipses) > 0 {
 		e := eclipses[0]
-		if a := isCrossing(e, s.Saas, predicate); a != nil {
+		if a := isCrossing(e, s.Saas, predicate); !a.IsZero() {
 			crossing = true
-			es = append(es, &Entry{
+			es = append(es, Entry{
 				Label: CERON,
 				When:  e.Starts.Add(-cer.TimeOn.Duration),
 			})
 		} else {
 			crossing = false
-			es = append(es, &Entry{
+			es = append(es, Entry{
 				Label: CEROFF,
 				When:  e.Starts.Add(-cer.TimeOff.Duration),
 			})
@@ -287,15 +292,15 @@ func (s *Schedule) scheduleOutsideCER(cer CerOption) ([]*Entry, error) {
 	return es, nil
 }
 
-func (s *Schedule) scheduleROC(roc RocOption) ([]*Entry, error) {
+func (s *Schedule) scheduleROC(roc RocOption) ([]Entry, error) {
 	var (
-		es        []*Entry
-		predicate = func(e, a *Period) bool { return e.Overlaps(a) }
+		es        []Entry
+		predicate = func(e, a Period) bool { return e.Overlaps(a) }
 	)
 
 	for _, e := range s.Eclipses {
 		as := isCrossingList(e, s.Saas, predicate)
-		var s1, s2 *Period
+		var s1, s2 Period
 		switch z := len(as); {
 		case z == 0:
 		case z == 1:
@@ -325,20 +330,20 @@ func (s *Schedule) scheduleROC(roc RocOption) ([]*Entry, error) {
 	return es, nil
 }
 
-func scheduleROCON(e, s *Period, roc RocOption) *Entry {
+func scheduleROCON(e, s Period, roc RocOption) Entry {
 	y := Entry{
 		Label: ROCON,
 		When:  e.Starts.Add(roc.WaitBeforeOn.Duration),
 	}
-	if s == nil {
-		return &y
+	if s.IsZero() {
+		return y
 	}
 	if !roc.TimeSAA.IsZero() && s.Duration() <= roc.TimeSAA.Duration {
 		enter, exit := s.Starts, s.Starts.Add(2*roc.TimeAZM.Duration)
 		if isBetween(enter, exit, y.When) || isBetween(enter, exit, y.When.Add(roc.TimeOn.Duration)) {
 			y.When = exit
 		}
-		return &y
+		return y
 	}
 	// check that ROCON does not completly overlap AZM of SAA enter
 	// then check that ROCON does not start within the AZM of the SAA enter
@@ -356,23 +361,23 @@ func scheduleROCON(e, s *Period, roc RocOption) *Entry {
 	if isBetween(s.Ends, s.Ends.Add(roc.TimeAZM.Duration), y.When) || isBetween(s.Ends, s.Ends.Add(roc.TimeAZM.Duration), y.When.Add(roc.TimeOn.Duration-time.Second)) {
 		y.When = s.Ends.Add(roc.TimeAZM.Duration)
 	}
-	return &y
+	return y
 }
 
-func scheduleROCOFF(e, s *Period, roc RocOption) *Entry {
+func scheduleROCOFF(e, s Period, roc RocOption) Entry {
 	y := Entry{
 		Label: ROCOFF,
 		When:  e.Ends.Add(-roc.TimeOff.Duration),
 	}
-	if s == nil {
-		return &y
+	if s.IsZero() {
+		return y
 	}
 	if roc.TimeSAA.Duration > 0 && s.Duration() <= roc.TimeSAA.Duration {
 		enter, exit := s.Starts, s.Starts.Add(2*roc.TimeAZM.Duration)
 		if isBetween(enter, exit, y.When) || isBetween(enter, exit, y.When.Add(roc.TimeOff.Duration)) {
 			y.When = enter.Add(-roc.TimeOff.Duration)
 		}
-		return &y
+		return y
 	}
 	// check that ROCOFF does not completly overlap AZM of SAA exit
 	// then check that ROCOFF does not start within the AZM of the SAA exit
@@ -390,7 +395,7 @@ func scheduleROCOFF(e, s *Period, roc RocOption) *Entry {
 	if isBetween(s.Starts, s.Starts.Add(roc.TimeAZM.Duration-time.Second), y.When) || isBetween(s.Starts, s.Starts.Add(roc.TimeAZM.Duration), y.When.Add(roc.TimeOff.Duration)) {
 		y.When = s.Starts.Add(-roc.TimeOff.Duration)
 	}
-	return &y
+	return y
 }
 
 func isBetween(f, t, d time.Time) bool {
@@ -429,7 +434,7 @@ func (s *Schedule) listPeriods(r io.Reader, resolution time.Duration, area Shape
 			if x.Ends, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
 				return timeBadSyntax(i, r[PredictTimeIndex])
 			}
-			s.Auroras = append(s.Auroras, &Period{
+			s.Auroras = append(s.Auroras, Period{
 				Label:  "aurora",
 				Starts: x.Starts.UTC(),
 				Ends:   x.Ends.Add(-resolution).UTC(),
@@ -445,7 +450,7 @@ func (s *Schedule) listPeriods(r io.Reader, resolution time.Duration, area Shape
 			if e.Ends, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
 				return timeBadSyntax(i, r[PredictTimeIndex])
 			}
-			s.Eclipses = append(s.Eclipses, &Period{
+			s.Eclipses = append(s.Eclipses, Period{
 				Label:  "eclipse",
 				Starts: e.Starts.UTC(),
 				Ends:   e.Ends.Add(-resolution).UTC(),
@@ -461,7 +466,7 @@ func (s *Schedule) listPeriods(r io.Reader, resolution time.Duration, area Shape
 			if a.Ends, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
 				return timeBadSyntax(i, r[PredictTimeIndex])
 			}
-			s.Saas = append(s.Saas, &Period{
+			s.Saas = append(s.Saas, Period{
 				Label:  "saa",
 				Starts: a.Starts.UTC(),
 				Ends:   a.Ends.Add(-resolution).UTC(),
@@ -498,14 +503,14 @@ func isLeavePeriod(r string) bool {
 	return r == "0" || r == "false" || r == "off"
 }
 
-func skipEclipses(es, as []*Period, cross bool, d time.Duration) []*Period {
-	predicate := func(e, a *Period) bool {
+func skipEclipses(es, as []Period, cross bool, d time.Duration) []Period {
+	predicate := func(e, a Period) bool {
 		return d == 0 || e.Intersect(a) > d
 	}
 	for i, e := range es {
 		switch a := isCrossing(e, as, predicate); {
-		case cross && a != nil:
-		case !cross && a == nil:
+		case cross && !a.IsZero():
+		case !cross && a.IsZero():
 		default:
 			return es[i:]
 		}
@@ -513,20 +518,24 @@ func skipEclipses(es, as []*Period, cross bool, d time.Duration) []*Period {
 	return nil
 }
 
-func isNear(a *Period, es []*Entry, predicate func(*Entry) bool) *Entry {
+func isNear(a Period, es []Entry, predicate func(Entry) bool) Entry {
+	var y Entry
 	for _, e := range es {
 		if predicate(e) {
-			return e
+			y = e
+			break
 		}
 		if e.When.After(a.Ends) {
 			break
 		}
 	}
-	return nil
+	return y
 }
 
-func isCrossingList(e *Period, as []*Period, predicate func(*Period, *Period) bool) []*Period {
-	var es []*Period
+type PeriodFunc func(Period, Period) bool
+
+func isCrossingList(e Period, as []Period, predicate PeriodFunc) []Period {
+	var es []Period
 	for _, a := range as {
 		if predicate(e, a) {
 			es = append(es, a)
@@ -538,17 +547,19 @@ func isCrossingList(e *Period, as []*Period, predicate func(*Period, *Period) bo
 	return es
 }
 
-func isCrossing(e *Period, as []*Period, predicate func(*Period, *Period) bool) *Period {
+func isCrossing(e Period, as []Period, predicate PeriodFunc) Period {
+	var p Period
 	if len(as) == 0 {
-		return nil
+		return p
 	}
 	for _, a := range as {
 		if predicate(e, a) {
-			return a
+			p = a
+			break
 		}
 		if a.Starts.After(e.Ends) {
 			break
 		}
 	}
-	return nil
+	return p
 }

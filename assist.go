@@ -71,7 +71,7 @@ func (a *Assist) Create() error {
 	a.printSettings()
 	var (
 		w      io.Writer
-		es     []*Entry
+		es     []Entry
 		digest = md5.New()
 	)
 	switch f, err := os.Create(a.Alliop); {
@@ -229,7 +229,7 @@ type coze struct {
 	Duration time.Duration
 }
 
-func (a *Assist) writeSchedule(w io.Writer, es []*Entry, when time.Time) (map[string]coze, error) {
+func (a *Assist) writeSchedule(w io.Writer, es []Entry, when time.Time) (map[string]coze, error) {
 	var (
 		err error
 		cid = 1
@@ -309,7 +309,7 @@ func (a *Assist) printSettings() {
 	log.Printf("settings: ACS duration: %s", a.Aurora.Time.Duration)
 }
 
-func (a *Assist) printRanges(es []*Entry) {
+func (a *Assist) printRanges(es []Entry) {
 	fst, lst := es[0], es[len(es)-1]
 	log.Printf("first command (%s) at %s (%d)", fst.Label, fst.When.Format(timeFormat), SOY(fst.When))
 	log.Printf("last command (%s) at %s (%d)", lst.Label, lst.When.Format(timeFormat), SOY(lst.When))
