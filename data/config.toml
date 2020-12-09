@@ -11,7 +11,7 @@ off-duration       = "90s"
 azm-duration       = "50s"
 time-between-onoff = "120s"
 saa-duration       = "10s"
-# [roc.commands]
+
 on-cmd-file        = ".\\tmp\\assist\\files\\MXGS_ROCON.txt"
 off-cmd-file       = ".\\tmp\\assist\\files\\MXGS_ROCOFF.txt"
 
@@ -26,6 +26,7 @@ switch-onoff-time = "0s"
 saa-crossing-time = "120s"
 on-duration       = "40s"
 off-duration      = "40s"
+
 on-cmd-file       = ".\\tmp\\assist\\files\\MMIA_CERON.txt"
 off-cmd-file      = ".\\tmp\\assist\\files\\MMIA_CEROFF.txt"
 
@@ -36,6 +37,6 @@ areas              = [
 	{east = -70, north = 180, south = 45, west = -120},
 	{east = 170, north = -30, south = -180, west = 50},
 ]
+
 on-cmd-file        = ".\\tmp\\assist\\files\\MXGS_ACSON.txt"
 off-cmd-file       = ".\\tmp\\assist\\files\\MXGS_ACSOFF.txt"
-
