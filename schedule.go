@@ -114,18 +114,33 @@ func (s *Schedule) Periods() []Period {
 }
 
 func (s *Schedule) ScheduleROC(roc RocOption) ([]Entry, error) {
+	if roc.IsEmpty() {
+		return nil, nil
+	}
 	return s.scheduleROC(roc)
 }
 
 func (s *Schedule) ScheduleCER(cer CerOption, roc RocOption, rs []Entry) ([]Entry, error) {
+	if cer.IsEmpty() {
+		return nil, nil
+	}
 	if cer.SwitchTime.IsZero() {
+		if len(rs) == 0 {
+			return nil, fmt.Errorf("CER: can not schedule without ROC")
+		}
 		return s.scheduleInsideCER(cer, roc, rs)
 	}
 	return s.scheduleOutsideCER(cer)
 }
 
 func (s *Schedule) ScheduleACS(aur AuroraOption, roc RocOption, rs []Entry) ([]Entry, error) {
+	if aur.IsEmpty() {
+		return nil, nil
+	}
 	var es []Entry
+	if len(rs) == 0 {
+		return nil, fmt.Errorf("ACS: can not schedule without ROC")
+	}
 	for _, p := range s.Auroras {
 		if !aur.Accept(p) {
 			continue

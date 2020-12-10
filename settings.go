@@ -154,6 +154,10 @@ type Fileset struct {
 	Off string `toml:"off-cmd-file"`
 }
 
+func (f Fileset) IsEmpty() bool {
+	return f.On == "" && f.Off == ""
+}
+
 func (f Fileset) Check() error {
 	if f.On == f.Off {
 		return sameFile("cmd-file")
