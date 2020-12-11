@@ -217,9 +217,9 @@ func (a *Assist) PrintEntries() error {
 	}
 	fmt.Printf("MXGS-ROC total time: %s (%d)", roctime, roccount)
 	fmt.Println()
-	fmt.Printf("MXGS-ACS total time: %s (%d)", certime, cercount)
+	fmt.Printf("MMIA-CER total time: %s (%d)", certime, cercount)
 	fmt.Println()
-	fmt.Printf("MMIA-CER total time: %s (%d)", acstime, acscount)
+	fmt.Printf("MXGS-ACS total time: %s (%d)", acstime, acscount)
 	fmt.Println()
 	return nil
 }

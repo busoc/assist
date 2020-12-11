@@ -33,6 +33,7 @@ type Entry struct {
 	Label   string
 	When    time.Time
 	Warning bool
+	Period
 }
 
 func (e Entry) IsZero() bool {
@@ -113,6 +114,27 @@ func (s *Schedule) Periods() []Period {
 	return es
 }
 
+func (s *Schedule) Schedule(roc RocOption, cer CerOption, aur AuroraOption) ([]Entry, error) {
+	rs, err := s.ScheduleROC(roc)
+	if err != nil {
+		return nil, err
+	}
+	as, err := s.ScheduleCER(cer, roc, rs)
+	if err != nil {
+		return nil, err
+	}
+	cs, err := s.ScheduleACS(aur, roc, rs)
+	if err != nil {
+		return nil, err
+	} else {
+	}
+	es := append([]Entry{}, rs...)
+	es = append(es, as...)
+	es = append(es, cs...)
+	sort.Slice(es, func(i, j int) bool { return es[i].When.Before(es[j].When) })
+	return es, nil
+}
+
 func (s *Schedule) ScheduleROC(roc RocOption) ([]Entry, error) {
 	if roc.IsEmpty() {
 		return nil, nil
@@ -145,32 +167,15 @@ func (s *Schedule) ScheduleACS(aur AuroraOption, roc RocOption, rs []Entry) ([]E
 		if !aur.Accept(p) {
 			continue
 		}
-		es = append(es, s.scheduleACSON(p, rs, aur, roc))
-		if off := s.scheduleACSOFF(p, aur, roc); !off.IsZero() {
-			es = append(es, off)
+		on := s.scheduleACSON(p, rs, aur, roc)
+		if on.IsZero() {
+			continue
+		}
+		// es = append(es, on)
+		if off := s.scheduleACSOFF(p, aur, roc); !off.IsZero() && off.When.After(on.When) {
+			es = append(es, on, off)
 		}
 	}
-	return es, nil
-}
-
-func (s *Schedule) Schedule(roc RocOption, cer CerOption, aur AuroraOption) ([]Entry, error) {
-	rs, err := s.ScheduleROC(roc)
-	if err != nil {
-		return nil, err
-	}
-	as, err := s.ScheduleCER(cer, roc, rs)
-	if err != nil {
-		return nil, err
-	}
-	cs, err := s.ScheduleACS(aur, roc, rs)
-	if err != nil {
-		return nil, err
-	} else {
-	}
-	es := append([]Entry{}, rs...)
-	es = append(es, as...)
-	es = append(es, cs...)
-	sort.Slice(es, func(i, j int) bool { return es[i].When.Before(es[j].When) })
 	return es, nil
 }
 
@@ -178,9 +183,12 @@ func (s *Schedule) scheduleACSOFF(p Period, aur AuroraOption, roc RocOption) Ent
 	other := isCrossing(p, s.Eclipses, func(curr, other Period) bool {
 		return !other.Ends.Before(curr.Ends.Add(-aur.Time.Duration))
 	})
-	e := Entry{Label: ACSOFF}
+	e := Entry{
+		Label: ACSOFF,
+		Period: p,
+	}
 	if other.IsZero() {
-		e.When = p.Ends
+		e.When = p.Ends.Add(-aur.Time.Duration)
 		return e
 	}
 	if p.Ends.Add(aur.Time.Duration).Before(other.Ends.Add(-roc.TimeOff.Duration)) {
@@ -204,11 +212,19 @@ func (s *Schedule) scheduleACSON(p Period, rs []Entry, aur AuroraOption, roc Roc
 		}
 		return e.When.After(starts) && e.When.Before(ends)
 	})
-	e := Entry{Label: ACSON}
+	e := Entry{
+		Label: ACSON,
+		Period: p,
+	}
 	if rocon.IsZero() {
 		e.When = p.Starts
 	} else {
-		e.When = e.When.Add(roc.TimeOn.Duration + roc.WaitBeforeOn.Duration)
+		when := rocon.When.Add(roc.TimeOn.Duration)
+		// when := rocon.When.Add(roc.TimeOn.Duration + roc.WaitBeforeOn.Duration)
+		if when.After(p.Ends) {
+			return e
+		}
+		e.When = when
 	}
 	return e
 }
@@ -239,6 +255,7 @@ func (s *Schedule) scheduleInsideCER(cer CerOption, roc RocOption, rs []Entry) (
 		cn := Entry{
 			Label: CERON,
 			When:  p.Starts.Add(-cer.BeforeSaa.Duration),
+			Period: p,
 		}
 		for i := len(rs) - 1; i >= 0; i-- {
 			r := rs[i]
@@ -256,6 +273,7 @@ func (s *Schedule) scheduleInsideCER(cer CerOption, roc RocOption, rs []Entry) (
 		cf := Entry{
 			Label: CEROFF,
 			When:  p.Ends.Add(cer.AfterSaa.Duration),
+			Period: p,
 		}
 		for i := 0; i < len(rs); i++ {
 			r := rs[i]
@@ -300,6 +318,7 @@ func (s *Schedule) scheduleOutsideCER(cer CerOption) ([]Entry, error) {
 			es = append(es, Entry{
 				Label: CEROFF,
 				When:  e.Starts.Add(-cer.TimeOff.Duration),
+				Period: e,
 			})
 		}
 		eclipses = skipEclipses(eclipses[1:], s.Saas, crossing, cer.SaaCrossingTime.Duration)
@@ -349,6 +368,7 @@ func scheduleROCON(e, s Period, roc RocOption) Entry {
 	y := Entry{
 		Label: ROCON,
 		When:  e.Starts.Add(roc.WaitBeforeOn.Duration),
+		Period: e,
 	}
 	if s.IsZero() {
 		return y
@@ -383,6 +403,7 @@ func scheduleROCOFF(e, s Period, roc RocOption) Entry {
 	y := Entry{
 		Label: ROCOFF,
 		When:  e.Ends.Add(-roc.TimeOff.Duration),
+		Period: e,
 	}
 	if s.IsZero() {
 		return y

@@ -12,7 +12,7 @@ const timeFormat = "2006-01-02T15:04:05.000000"
 
 const (
 	Version   = "2.0.0-alpha"
-	BuildTime = "2020-12-08 15:15:00"
+	BuildTime = "2020-12-11 10:15:00"
 	Program   = "assist"
 )
 
