@@ -214,6 +214,7 @@ type AuroraOption struct {
 
 	Night Duration `toml:"min-night-duration"`
 	Time  Duration `toml:"duration"`
+	TimeBetween  Duration `toml:"time-between-onoff"`
 	Areas []Rect   `toml:"areas"`
 }
 
