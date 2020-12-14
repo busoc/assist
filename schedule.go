@@ -203,9 +203,8 @@ func (s *Schedule) scheduleACSOFF(p Period, aur AuroraOption, roc RocOption) Ent
 
 func (s *Schedule) scheduleACSON(p Period, rs []Entry, aur AuroraOption, roc RocOption) Entry {
 	var (
-		min    = roc.TimeOn.Duration + roc.WaitBeforeOn.Duration
-		starts = p.Starts.Add(-min)
-		ends   = p.Starts.Add(min)
+		starts = p.Starts
+		ends   = p.Starts.Add(roc.TimeOn.Duration)
 	)
 	// schedule ACSON: try to find the nearset ROCON in its execution time
 	// if no ROCON is found, ACSON can be scheduled at beginning of period
