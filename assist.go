@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -135,7 +136,11 @@ func (a *Assist) PrintPeriods() error {
 		nighttime, saatime, aurtime    time.Duration
 		nightcount, saacount, aurcount int
 	)
-	for i, p := range a.Periods() {
+	periods := a.Periods()
+	sort.Slice(periods, func(i, j int) bool {
+		return periods[i].Starts.Before(periods[j].Starts)
+	})
+	for i, p := range periods {
 		fmt.Printf(pattern, i, p.Label, p.Starts.Format(timefmt), p.Ends.Format(timefmt), p.Duration())
 		fmt.Println()
 		switch p.Label {
@@ -183,6 +188,9 @@ func (a *Assist) PrintEntries() error {
 		roctime, certime, acstime    time.Duration
 		roccount, cercount, acscount int
 	)
+	sort.Slice(es, func(i, j int) bool {
+		return es[i].When.Before(es[j].When)
+	})
 	for i, e := range es {
 		var to time.Time
 		switch e.Label {

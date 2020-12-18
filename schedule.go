@@ -195,7 +195,7 @@ func (s *Schedule) scheduleACSOFF(p Period, aur AuroraOption, roc RocOption) Ent
 		e.When = p.Ends.Add(-aur.Time.Duration)
 		return e
 	}
-	if p.Ends.Add(aur.Time.Duration).Before(other.Ends.Add(-roc.TimeOff.Duration)) {
+	if p.Ends.Add(aur.Time.Duration).Before(other.Ends.Add(-roc.TimeOn.Duration)) {
 		e.When = p.Ends.Add(-aur.Time.Duration)
 	}
 	return e
@@ -203,8 +203,8 @@ func (s *Schedule) scheduleACSOFF(p Period, aur AuroraOption, roc RocOption) Ent
 
 func (s *Schedule) scheduleACSON(p Period, rs []Entry, aur AuroraOption, roc RocOption) Entry {
 	var (
-		starts = p.Starts
-		ends   = p.Starts.Add(roc.TimeOn.Duration)
+		starts = p.Starts.Add(-roc.TimeOn.Duration)
+		ends   = p.Starts.Add(roc.WaitBeforeOn.Duration+roc.TimeOn.Duration) // .Add(roc.TimeOn.Duration+time.Second)
 	)
 	// schedule ACSON: try to find the nearset ROCON in its execution time
 	// if no ROCON is found, ACSON can be scheduled at beginning of period
@@ -215,11 +215,12 @@ func (s *Schedule) scheduleACSON(p Period, rs []Entry, aur AuroraOption, roc Roc
 		}
 		return e.When.After(starts) && e.When.Before(ends)
 	})
+	// fmt.Printf("%d) period: %+v, boundaries: %s, %s - rocon: %s\n", len(rs), p, starts, ends, rocon.When)
 	e := Entry{
 		Label: ACSON,
 		Period: p,
 	}
-	if rocon.IsZero() {
+	if rocon.IsZero() || p.Starts.After(rocon.When.Add(roc.TimeOn.Duration)) {
 		e.When = p.Starts
 	} else {
 		when := rocon.When.Add(roc.TimeOn.Duration)
