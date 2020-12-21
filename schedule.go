@@ -176,8 +176,12 @@ func (s *Schedule) ScheduleACS(aur AuroraOption, roc RocOption, rs []Entry) ([]E
 		// 		continue
 		// 	}
 		// }
-		if off := s.scheduleACSOFF(p, aur, roc); !off.IsZero() && off.When.After(on.When.Add(aur.Time.Duration)) {
-			es = append(es, on, off)
+		off := s.scheduleACSOFF(p, aur, roc)
+		if off.IsZero() {
+			es = append(es, on)
+		}
+		if !off.IsZero() && off.When.After(on.When.Add(aur.Time.Duration)) {
+			es = append(es, off)
 		}
 	}
 	return es, nil
@@ -215,7 +219,6 @@ func (s *Schedule) scheduleACSON(p Period, rs []Entry, aur AuroraOption, roc Roc
 		}
 		return e.When.After(starts) && e.When.Before(ends)
 	})
-	// fmt.Printf("%d) period: %+v, boundaries: %s, %s - rocon: %s\n", len(rs), p, starts, ends, rocon.When)
 	e := Entry{
 		Label: ACSON,
 		Period: p,
