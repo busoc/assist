@@ -192,8 +192,16 @@ func (s *Schedule) scheduleACSOFF(p Period, aur AuroraOption, roc RocOption) Ent
 		e.When = p.Ends.Add(-aur.Time.Duration)
 		return e
 	}
-	if p.Ends.Add(aur.Time.Duration).Before(other.Ends.Add(-roc.TimeOn.Duration)) {
-		e.When = p.Ends.Add(-aur.Time.Duration)
+	var (
+		acsoff = p.Ends.Add(-aur.Time.Duration)
+		rocoff = other.Ends.Add(-roc.TimeOff.Duration)
+	)
+	switch {
+	case acsoff.Before(rocoff):
+		e.When = acsoff
+	case p.Ends.Add(-aur.Time.Duration).Equal(other.Ends.Add(-roc.TimeOff.Duration)):
+		e.When = rocoff.Add(-aur.Time.Duration)
+	default:
 	}
 	return e
 }
