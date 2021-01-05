@@ -171,15 +171,8 @@ func (s *Schedule) ScheduleACS(aur AuroraOption, roc RocOption, rs []Entry) ([]E
 		if on.IsZero() {
 			continue
 		}
-		// if between := aur.TimeBetween.Duration > 0 {
-		// 	if diff := off.When.Sub(on.When.Add(aur.Time.Duration)); diff < between {
-		// 		continue
-		// 	}
-		// }
+		es = append(es, on)
 		off := s.scheduleACSOFF(p, aur, roc)
-		if off.IsZero() {
-			es = append(es, on)
-		}
 		if !off.IsZero() && off.When.After(on.When.Add(aur.Time.Duration)) {
 			es = append(es, off)
 		}
