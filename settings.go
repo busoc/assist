@@ -212,7 +212,7 @@ func (c CerOption) Can() bool {
 type AuroraOption struct {
 	Fileset
 
-	Night Duration `toml:"min-night-duration"`
+	Night Duration `toml:"min-aurora-duration"`
 	Time  Duration `toml:"duration"`
 	TimeBetween  Duration `toml:"time-between-onoff"`
 	Areas []Rect   `toml:"areas"`
@@ -223,7 +223,8 @@ func (a AuroraOption) Can() bool {
 }
 
 func (a AuroraOption) Accept(p Period) bool {
-	return p.Duration() >= (a.Night.Duration + 2*a.Time.Duration)
+	// return p.Duration() >= (a.Night.Duration + 2*a.Time.Duration)
+	return p.Duration() >= a.Night.Duration
 }
 
 func (a AuroraOption) Area() Shape {

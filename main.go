@@ -11,8 +11,8 @@ import (
 const timeFormat = "2006-01-02T15:04:05.000000"
 
 const (
-	Version   = "2.0.0"
-	BuildTime = "2021-01-05 08:30:00"
+	Version   = "2.0.1"
+	BuildTime = "2021-01-06 08:49:00"
 	Program   = "assist"
 )
 
