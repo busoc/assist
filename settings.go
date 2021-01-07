@@ -212,10 +212,10 @@ func (c CerOption) Can() bool {
 type AuroraOption struct {
 	Fileset
 
-	Night Duration `toml:"min-aurora-duration"`
-	Time  Duration `toml:"duration"`
-	TimeBetween  Duration `toml:"time-between-onoff"`
-	Areas []Rect   `toml:"areas"`
+	Night       Duration `toml:"min-aurora-duration"`
+	Time        Duration `toml:"duration"`
+	TimeBetween Duration `toml:"time-between-onoff"`
+	Areas       []Rect   `toml:"areas"`
 }
 
 func (a AuroraOption) Can() bool {

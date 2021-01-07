@@ -57,18 +57,18 @@ type Schedule struct {
 	Auroras  []Period
 }
 
-func Open(p string, d time.Duration, area Shape) (*Schedule, error) {
+func Open(p string, area Shape) (*Schedule, error) {
 	r, err := os.Open(p)
 	if err != nil {
 		return nil, checkError(err, nil)
 	}
 	defer r.Close()
-	return OpenReader(r, d, area)
+	return OpenReader(r, area)
 }
 
-func OpenReader(r io.Reader, d time.Duration, area Shape) (*Schedule, error) {
+func OpenReader(r io.Reader, area Shape) (*Schedule, error) {
 	var s Schedule
-	return &s, s.listPeriods(r, d, area)
+	return &s, s.listPeriods(r, area)
 }
 
 func (s *Schedule) Filter(t time.Time) *Schedule {
@@ -76,9 +76,9 @@ func (s *Schedule) Filter(t time.Time) *Schedule {
 		return s
 	}
 	var (
-		es = make([]Period, 0, len(s.Eclipses))
-		as = make([]Period, 0, len(s.Saas))
-		xs = make([]Period, 0, len(s.Auroras))
+		es   = make([]Period, 0, len(s.Eclipses))
+		as   = make([]Period, 0, len(s.Saas))
+		xs   = make([]Period, 0, len(s.Auroras))
 		skip []Period
 	)
 	for _, e := range s.Eclipses {
@@ -93,6 +93,7 @@ func (s *Schedule) Filter(t time.Time) *Schedule {
 			as = append(as, a)
 		}
 	}
+	sort.Slice(skip, func(i, j int) bool { return skip[i].Starts.Before(skip[j].Starts) })
 	for _, a := range s.Auroras {
 		x := sort.Search(len(skip), func(i int) bool {
 			e := skip[i]
@@ -195,7 +196,7 @@ func (s *Schedule) scheduleACSOFF(p Period, aur AuroraOption, roc RocOption) Ent
 		return !other.Ends.Before(curr.Ends.Add(-aur.Time.Duration))
 	})
 	e := Entry{
-		Label: ACSOFF,
+		Label:  ACSOFF,
 		Period: p,
 	}
 	if other.IsZero() {
@@ -219,7 +220,7 @@ func (s *Schedule) scheduleACSOFF(p Period, aur AuroraOption, roc RocOption) Ent
 func (s *Schedule) scheduleACSON(p Period, rs []Entry, aur AuroraOption, roc RocOption) Entry {
 	var (
 		starts = p.Starts.Add(-roc.TimeOn.Duration)
-		ends   = p.Starts.Add(roc.WaitBeforeOn.Duration+roc.TimeOn.Duration) // .Add(roc.TimeOn.Duration+time.Second)
+		ends   = p.Starts.Add(roc.WaitBeforeOn.Duration + roc.TimeOn.Duration) // .Add(roc.TimeOn.Duration+time.Second)
 	)
 	// schedule ACSON: try to find the nearset ROCON in its execution time
 	// if no ROCON is found, ACSON can be scheduled at beginning of period
@@ -231,7 +232,7 @@ func (s *Schedule) scheduleACSON(p Period, rs []Entry, aur AuroraOption, roc Roc
 		return e.When.After(starts) && e.When.Before(ends)
 	})
 	e := Entry{
-		Label: ACSON,
+		Label:  ACSON,
 		Period: p,
 	}
 	if rocon.IsZero() || p.Starts.After(rocon.When.Add(roc.TimeOn.Duration)) {
@@ -264,15 +265,15 @@ func (s *Schedule) scheduleInsideCER(cer CerOption, roc RocOption, rs []Entry) (
 			f, t := as[0], as[len(as)-1]
 			p = Period{
 				Starts: f.Starts,
-				Ends: t.Ends,
+				Ends:   t.Ends,
 			}
 		}
 		if p.Duration() < cer.SaaCrossingTime.Duration || e.Intersect(p) < cer.SaaCrossingTime.Duration {
 			continue
 		}
 		cn := Entry{
-			Label: CERON,
-			When:  p.Starts.Add(-cer.BeforeSaa.Duration),
+			Label:  CERON,
+			When:   p.Starts.Add(-cer.BeforeSaa.Duration),
 			Period: p,
 		}
 		for i := len(rs) - 1; i >= 0; i-- {
@@ -289,8 +290,8 @@ func (s *Schedule) scheduleInsideCER(cer CerOption, roc RocOption, rs []Entry) (
 			}
 		}
 		cf := Entry{
-			Label: CEROFF,
-			When:  p.Ends.Add(cer.AfterSaa.Duration),
+			Label:  CEROFF,
+			When:   p.Ends.Add(cer.AfterSaa.Duration),
 			Period: p,
 		}
 		for i := 0; i < len(rs); i++ {
@@ -334,8 +335,8 @@ func (s *Schedule) scheduleOutsideCER(cer CerOption) ([]Entry, error) {
 		} else {
 			crossing = false
 			es = append(es, Entry{
-				Label: CEROFF,
-				When:  e.Starts.Add(-cer.TimeOff.Duration),
+				Label:  CEROFF,
+				When:   e.Starts.Add(-cer.TimeOff.Duration),
 				Period: e,
 			})
 		}
@@ -384,8 +385,8 @@ func (s *Schedule) scheduleROC(roc RocOption) ([]Entry, error) {
 
 func scheduleROCON(e, s Period, roc RocOption) Entry {
 	y := Entry{
-		Label: ROCON,
-		When:  e.Starts.Add(roc.WaitBeforeOn.Duration),
+		Label:  ROCON,
+		When:   e.Starts.Add(roc.WaitBeforeOn.Duration),
 		Period: e,
 	}
 	if s.IsZero() {
@@ -419,8 +420,8 @@ func scheduleROCON(e, s Period, roc RocOption) Entry {
 
 func scheduleROCOFF(e, s Period, roc RocOption) Entry {
 	y := Entry{
-		Label: ROCOFF,
-		When:  e.Ends.Add(-roc.TimeOff.Duration),
+		Label:  ROCOFF,
+		When:   e.Ends.Add(-roc.TimeOff.Duration),
 		Period: e,
 	}
 	if s.IsZero() {
@@ -456,7 +457,7 @@ func isBetween(f, t, d time.Time) bool {
 	return f.Before(t) && (f.Equal(d) || t.Equal(d) || f.Before(d) && t.After(d))
 }
 
-func (s *Schedule) listPeriods(r io.Reader, resolution time.Duration, area Shape) error {
+func (s *Schedule) listPeriods(r io.Reader, area Shape) error {
 	rs := csv.NewReader(r)
 	rs.Comment = PredictComment
 	rs.Comma = PredictComma
@@ -466,7 +467,10 @@ func (s *Schedule) listPeriods(r io.Reader, resolution time.Duration, area Shape
 	// 	return err
 	// }
 
-	var e, a, x, z Period
+	var (
+		e, a, x, z Period
+		last       time.Time
+	)
 	for i := 0; ; i++ {
 		r, err := rs.Read()
 		if r == nil && err == io.EOF {
@@ -485,13 +489,13 @@ func (s *Schedule) listPeriods(r io.Reader, resolution time.Duration, area Shape
 			}
 		}
 		if (!area.Contains(lat, lng) || isLeavePeriod(r[PredictEclipseIndex])) && !x.IsZero() {
-			if x.Ends, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
-				return timeBadSyntax(i, r[PredictTimeIndex])
-			}
+			// if x.Ends, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
+			// 	return timeBadSyntax(i, r[PredictTimeIndex])
+			// }
 			s.Auroras = append(s.Auroras, Period{
 				Label:  "aurora",
 				Starts: x.Starts.UTC(),
-				Ends:   x.Ends.Add(-resolution).UTC(),
+				Ends:   last, //x.Ends.Add(-resolution).UTC(),
 			})
 			x = z
 		}
@@ -501,13 +505,13 @@ func (s *Schedule) listPeriods(r io.Reader, resolution time.Duration, area Shape
 			}
 		}
 		if isLeavePeriod(r[PredictEclipseIndex]) && !e.IsZero() {
-			if e.Ends, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
-				return timeBadSyntax(i, r[PredictTimeIndex])
-			}
+			// if e.Ends, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
+			// 	return timeBadSyntax(i, r[PredictTimeIndex])
+			// }
 			s.Eclipses = append(s.Eclipses, Period{
 				Label:  "eclipse",
 				Starts: e.Starts.UTC(),
-				Ends:   e.Ends.Add(-resolution).UTC(),
+				Ends:   last, //e.Ends.Add(-resolution).UTC(),
 			})
 			e = z
 		}
@@ -517,15 +521,19 @@ func (s *Schedule) listPeriods(r io.Reader, resolution time.Duration, area Shape
 			}
 		}
 		if isLeavePeriod(r[PredictSaaIndex]) && !a.IsZero() {
-			if a.Ends, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
-				return timeBadSyntax(i, r[PredictTimeIndex])
-			}
+			// if a.Ends, err = time.Parse(timeFormat, r[PredictTimeIndex]); err != nil {
+			// 	return timeBadSyntax(i, r[PredictTimeIndex])
+			// }
 			s.Saas = append(s.Saas, Period{
 				Label:  "saa",
 				Starts: a.Starts.UTC(),
-				Ends:   a.Ends.Add(-resolution).UTC(),
+				Ends:   last, //a.Ends.Add(-resolution).UTC(),
 			})
 			a = z
+		}
+		last, err = time.Parse(timeFormat, r[PredictTimeIndex])
+		if err != nil {
+			return timeBadSyntax(i, r[PredictTimeIndex])
 		}
 	}
 	if len(s.Eclipses) == 0 && len(s.Saas) == 0 {

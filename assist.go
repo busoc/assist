@@ -24,8 +24,8 @@ type Assist struct {
 	Resolution  Duration `toml:"resolution"`
 	KeepComment bool     `toml:"keep-comment"`
 
-	ROC    RocOption    `toml:"roc"`
-	CER    CerOption    `toml:"cer"`
+	ROC RocOption    `toml:"roc"`
+	CER CerOption    `toml:"cer"`
 	ACS AuroraOption `toml:"acs"`
 
 	*Schedule `toml:"-"`
@@ -35,7 +35,7 @@ func Default() *Assist {
 	return &Assist{
 		ROC:         rocDefault,
 		CER:         cerDefault,
-		ACS:      aurDefault,
+		ACS:         aurDefault,
 		Instr:       INSTR,
 		Alliop:      ALLIOP,
 		KeepComment: true,
@@ -53,9 +53,9 @@ func (a *Assist) Load(file string) error {
 		err  error
 	)
 	if a.Trajectory != "" {
-		a.Schedule, err = Open(a.Trajectory, a.Resolution.Duration, area)
+		a.Schedule, err = Open(a.Trajectory, area)
 	} else {
-		a.Schedule, err = OpenReader(os.Stdin, a.Resolution.Duration, area)
+		a.Schedule, err = OpenReader(os.Stdin, area)
 	}
 	return err
 }
@@ -124,7 +124,7 @@ func (a *Assist) Create() error {
 }
 
 func (a *Assist) PrintSettings() error {
-  return nil
+	return nil
 }
 
 func (a *Assist) PrintPeriods() error {
