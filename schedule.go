@@ -79,10 +79,13 @@ func (s *Schedule) Filter(t time.Time) *Schedule {
 		es = make([]Period, 0, len(s.Eclipses))
 		as = make([]Period, 0, len(s.Saas))
 		xs = make([]Period, 0, len(s.Auroras))
+		skip []Period
 	)
 	for _, e := range s.Eclipses {
 		if e.Starts.After(t) {
 			es = append(es, e)
+		} else {
+			skip = append(skip, e)
 		}
 	}
 	for _, a := range s.Saas {
@@ -91,6 +94,13 @@ func (s *Schedule) Filter(t time.Time) *Schedule {
 		}
 	}
 	for _, a := range s.Auroras {
+		x := sort.Search(len(skip), func(i int) bool {
+			e := skip[i]
+			return e.Starts.Before(t) && e.Starts.Before(a.Starts) && e.Ends.After(a.Starts)
+		})
+		if x < len(skip) && !skip[x].Starts.After(t) {
+			continue
+		}
 		if a.Starts.After(t) {
 			xs = append(xs, a)
 		}
@@ -452,9 +462,9 @@ func (s *Schedule) listPeriods(r io.Reader, resolution time.Duration, area Shape
 	rs.Comma = PredictComma
 	rs.FieldsPerRecord = PredictColumns
 
-	if r, err := rs.Read(); r == nil && err != nil {
-		return err
-	}
+	// if r, err := rs.Read(); r == nil && err != nil {
+	// 	return err
+	// }
 
 	var e, a, x, z Period
 	for i := 0; ; i++ {
