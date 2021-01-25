@@ -245,6 +245,18 @@ func (s *Schedule) scheduleACSON(p Period, rs []Entry, aur AuroraOption, roc Roc
 		}
 		e.When = when
 	}
+	rocoff := isNear(p, rs, func(x Entry) bool {
+		if x.Label != ROCOFF {
+			return false
+		}
+		if e.When.Equal(x.When) {
+			return true
+		}
+		return e.When.After(x.When) && e.When.Before(x.When.Add(roc.TimeOff.Duration))
+	})
+	if !rocoff.IsZero() {
+		return Entry{Label: ACSON}
+	}
 	return e
 }
 
