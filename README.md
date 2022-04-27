@@ -18,7 +18,7 @@ section describes briefly how assist works for both of the instruments.
 MXGS should be put on at the beginning of each ISS night and off at the end of each
 of ISS night.
 
-Howver, assist should take into account crossing of SAA during the night. Indeed,
+However, assist should take into account crossing of SAA during the night. Indeed,
 when a SAA crossing is detected, another block of commands (AZM) should be executed
 before the ROCOON/ROCOFF. The corner cases are when the crossing of SAA occurs at
 the beginning or at the end of the ISS night.
