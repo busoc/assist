@@ -187,6 +187,10 @@ func (s *Schedule) ScheduleACS(aur AuroraOption, roc RocOption, rs []Entry) ([]E
 		if !off.IsZero() && off.When.After(on.When.Add(aur.Time.Duration)) {
 			es = append(es, off)
 		}
+		if !off.IsZero() && off.When.Before(on.When.Add(aur.Time.Duration)) {
+			off.When=off.When.Add(2*aur.Time.Duration)
+			es = append(es, off)
+		}
 	}
 	return es, nil
 }
